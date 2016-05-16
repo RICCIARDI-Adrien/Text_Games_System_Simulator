@@ -1,2 +1,2 @@
-# Text_Games_System_Simulator
-Simulate the whole Text Games System on a PC.
+# Text Games System Simulator
+Simulate the whole Text Games System board on a PC.
