@@ -19,8 +19,10 @@
  */
 unsigned short ProgramMemoryRead(unsigned short Address);
 
-// TODO
-//programmemoryloadhexfile
+/** Load an Intel Hex file content to the program memory.
+ * @param String_Hex_File The file to load.
+ */
+void ProgramMemoryLoadHexFile(char *String_Hex_File);
 
 // TODO for flash access
 // programread
