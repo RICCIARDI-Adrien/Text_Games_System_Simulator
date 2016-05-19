@@ -3,6 +3,7 @@
  * @author Adrien RICCIARDI
  */
 #include <Log.h>
+#include <pthread.h>
 #include <Register_File.h>
 
 //-------------------------------------------------------------------------------------------------
@@ -39,6 +40,9 @@ typedef struct
 //-------------------------------------------------------------------------------------------------
 /** The register file split in banks. */
 static TRegisterFileRegister Register_File[REGISTER_FILE_BANKS_COUNT][REGISTER_FILE_REGISTERS_IN_BANK_COUNT];
+
+/** Protect register file content from concurrent accesses. */
+static pthread_mutex_t Register_File_Mutex_Concurrent_Access = PTHREAD_MUTEX_INITIALIZER;
 
 //-------------------------------------------------------------------------------------------------
 // Private functions
@@ -161,66 +165,96 @@ void RegisterFileInitialize(void)
 
 unsigned char RegisterFileRead(unsigned char Address)
 {
-	int Current_Bank;
+	int Current_Bank, Return_Value;
 	TRegisterFileRegister *Pointer_Register;
-	
+
+	pthread_mutex_lock(&Register_File_Mutex_Concurrent_Access);
+
 	// Get the current bank number from STATUS register
 	Current_Bank = ((Register_File[0][REGISTER_FILE_REGISTER_ADDRESS_STATUS].Content.Data) >> 5) & 0x03;
-	
+
 	// Get the required register
 	Pointer_Register = &Register_File[Current_Bank][Address];
-		
-	return Pointer_Register->ReadCallback(&Pointer_Register->Content);
+	// Get the register content
+	Return_Value = Pointer_Register->ReadCallback(&Pointer_Register->Content);
+
+	pthread_mutex_unlock(&Register_File_Mutex_Concurrent_Access);
+
+	return Return_Value;
 }
 
 void RegisterFileWrite(unsigned char Address, unsigned char Data)
 {
 	int Current_Bank;
 	TRegisterFileRegister *Pointer_Register;
-	
+
+	pthread_mutex_lock(&Register_File_Mutex_Concurrent_Access);
+
 	// Get the current bank number from STATUS register
 	Current_Bank = ((Register_File[0][REGISTER_FILE_REGISTER_ADDRESS_STATUS].Content.Data) >> 5) & 0x03;
-	
+
 	// Get the required register
 	Pointer_Register = &Register_File[Current_Bank][Address];
-	
+	// Set the register content
 	Pointer_Register->WriteCallback(&Pointer_Register->Content, Data);
+
+	pthread_mutex_unlock(&Register_File_Mutex_Concurrent_Access);
 }
 
 void RegisterFileDump(void)
 {
 	int Address;
-	
+
 	LOG(LOG_LEVEL_DEBUG, "Address | Bank 0 | Bank 1 | Bank 2 | Bank 3\n");
 	LOG(LOG_LEVEL_DEBUG, "--------+--------+--------+--------+--------\n");
+
+	pthread_mutex_lock(&Register_File_Mutex_Concurrent_Access);
+
 	for (Address = 0; Address < REGISTER_FILE_REGISTERS_IN_BANK_COUNT; Address++) LOG(LOG_LEVEL_DEBUG, "0x%02X    |  0x%02X  |  0x%02X  |  0x%02X  |  0x%02X\n", Address, Register_File[0][Address].ReadCallback(&Register_File[0][Address].Content), Register_File[1][Address].ReadCallback(&Register_File[1][Address].Content), Register_File[2][Address].ReadCallback(&Register_File[2][Address].Content), Register_File[3][Address].ReadCallback(&Register_File[3][Address].Content));
+
+	pthread_mutex_unlock(&Register_File_Mutex_Concurrent_Access);
 }
 
 int RegisterFileHasInterruptFired(void)
 {
-        unsigned char INTCON_Register, PIE1_Register, PIR1_Register;
+	unsigned char INTCON_Register, PIE1_Register, PIR1_Register;
+	int Return_Value = 1;
 
-        // Check flags not depending from PIE bit
-        INTCON_Register = Register_File[REGISTER_FILE_REGISTER_BANK_INTCON][REGISTER_FILE_REGISTER_ADDRESS_INTCON].Content.Data;
-        if (!(INTCON_Register & REGISTER_FILE_REGISTER_BIT_INTCON_GIE)) return 0; // Interrupts are disabled
-        // T0I
-        if (INTCON_Register & (REGISTER_FILE_REGISTER_BIT_INTCON_T0IE | REGISTER_FILE_REGISTER_BIT_INTCON_T0IF)) return 1;
-        // INT
-        if (INTCON_Register & (REGISTER_FILE_REGISTER_BIT_INTCON_INTE | REGISTER_FILE_REGISTER_BIT_INTCON_INTF)) return 1;
-        // RBI
-        if (INTCON_Register & (REGISTER_FILE_REGISTER_BIT_INTCON_RBIE | REGISTER_FILE_REGISTER_BIT_INTCON_RBIF)) return 1;
+	pthread_mutex_lock(&Register_File_Mutex_Concurrent_Access);
 
-        // Check peripheral flags
-        if (!(INTCON_Register & REGISTER_FILE_REGISTER_BIT_INTCON_PEIE)) return 0; // Peripheral interrupts are disabled
-        PIE1_Register = Register_File[REGISTER_FILE_REGISTER_BANK_PIE1][REGISTER_FILE_REGISTER_ADDRESS_PIE1].Content.Data;
+	// Check flags not depending from PIE bit
+	INTCON_Register = Register_File[REGISTER_FILE_REGISTER_BANK_INTCON][REGISTER_FILE_REGISTER_ADDRESS_INTCON].Content.Data;
+	if (!(INTCON_Register & REGISTER_FILE_REGISTER_BIT_INTCON_GIE))
+	{
+		Return_Value = 0; // Interrupts are disabled
+		goto Exit;
+	}
+	// T0I
+	if (INTCON_Register & (REGISTER_FILE_REGISTER_BIT_INTCON_T0IE | REGISTER_FILE_REGISTER_BIT_INTCON_T0IF)) goto Exit;
+	// INT
+	if (INTCON_Register & (REGISTER_FILE_REGISTER_BIT_INTCON_INTE | REGISTER_FILE_REGISTER_BIT_INTCON_INTF)) goto Exit;
+	// RBI
+	if (INTCON_Register & (REGISTER_FILE_REGISTER_BIT_INTCON_RBIE | REGISTER_FILE_REGISTER_BIT_INTCON_RBIF)) goto Exit;
+
+	// Check peripheral flags
+	if (!(INTCON_Register & REGISTER_FILE_REGISTER_BIT_INTCON_PEIE))
+	{
+		Return_Value = 0;  // Peripheral interrupts are disabled
+		goto Exit;
+	}
+	PIE1_Register = Register_File[REGISTER_FILE_REGISTER_BANK_PIE1][REGISTER_FILE_REGISTER_ADDRESS_PIE1].Content.Data;
 	PIR1_Register = Register_File[REGISTER_FILE_REGISTER_BANK_PIR1][REGISTER_FILE_REGISTER_ADDRESS_PIR1].Content.Data;
 	// RCI
-	if ((PIE1_Register & REGISTER_FILE_REGISTER_BIT_PIE1_RCIE) && (PIR1_Register & REGISTER_FILE_REGISTER_BIT_PIR1_RCIF)) return 1;
+	if ((PIE1_Register & REGISTER_FILE_REGISTER_BIT_PIE1_RCIE) && (PIR1_Register & REGISTER_FILE_REGISTER_BIT_PIR1_RCIF)) goto Exit;
 	// TXI
-	if ((PIE1_Register & REGISTER_FILE_REGISTER_BIT_PIE1_TXIE) && (PIR1_Register & REGISTER_FILE_REGISTER_BIT_PIR1_TXIF)) return 1;
+	if ((PIE1_Register & REGISTER_FILE_REGISTER_BIT_PIE1_TXIE) && (PIR1_Register & REGISTER_FILE_REGISTER_BIT_PIR1_TXIF)) goto Exit;
 
-        // TODO implement other needed peripherals
+	// TODO implement other needed peripherals
 
-	return 0;
+	Return_Value = 0;
+
+Exit:
+	pthread_mutex_unlock(&Register_File_Mutex_Concurrent_Access);
+	return Return_Value;
 }
 
