@@ -19,6 +19,17 @@
 #define REGISTER_FILE_REGISTER_ADDRESS_STATUS 0x03 // Replicated in all other banks
 #define REGISTER_FILE_REGISTER_ADDRESS_FSR 0x04 // Replicated in all other banks
 #define REGISTER_FILE_REGISTER_ADDRESS_PCLATH 0x0A // Replicated in all other banks
+#define REGISTER_FILE_REGISTER_ADDRESS_INTCON 0x0B // Replicated in all other banks
+
+/** STATUS register Carry flag. */
+#define REGISTER_FILE_REGISTER_BIT_STATUS_CARRY (1 << 0)
+/** STATUS register Digit Carry flag. */
+#define REGISTER_FILE_REGISTER_BIT_STATUS_DIGIT_CARRY (1 << 1)
+/** STATUS register Zero flag. */
+#define REGISTER_FILE_REGISTER_BIT_STATUS_ZERO (1 << 2)
+
+/** INTCON register Global Interrupt Enable bit. */
+#define REGISTER_FILE_REGISTER_BIT_INTCON_GLOBAL_INTERRUPT_ENABLE (1 << 7)
 
 //-------------------------------------------------------------------------------------------------
 // Functions

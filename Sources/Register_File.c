@@ -134,6 +134,14 @@ void RegisterFileInitialize(void)
 		Register_File[Bank][REGISTER_FILE_REGISTER_ADDRESS_PCLATH].WriteCallback = RegisterFileRemappedRAMWrite;
 	}
 	
+	// Remap INTCON register data from bank 1 to 3 to bank 0
+	for (Bank = 1; Bank < REGISTER_FILE_BANKS_COUNT; Bank++)
+	{
+		Register_File[Bank][REGISTER_FILE_REGISTER_ADDRESS_INTCON].Content.Pointer_Data = &Register_File[0][REGISTER_FILE_REGISTER_ADDRESS_INTCON].Content.Data;
+		Register_File[Bank][REGISTER_FILE_REGISTER_ADDRESS_INTCON].ReadCallback = RegisterFileRemappedRAMRead;
+		Register_File[Bank][REGISTER_FILE_REGISTER_ADDRESS_INTCON].WriteCallback = RegisterFileRemappedRAMWrite;
+	}
+	
 	//===============================================
 	// Configure remapped data access located at banks end
 	//===============================================

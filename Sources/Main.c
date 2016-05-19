@@ -16,6 +16,7 @@ int main(int argc, char *argv[])
 {
 	char *String_Log_File, *String_Program_Hex_File;
 	TLogLevel Log_Level;
+	int i;
 	
 	// Check parameters
 	if (argc != 4)
@@ -45,7 +46,7 @@ int main(int argc, char *argv[])
 	ProgramMemoryLoadHexFile(String_Program_Hex_File);
 	
 	// TEST
-	CoreExecuteNextInstruction();
+	for (i = 0; i < 100; i++) CoreExecuteNextInstruction();
 	
 	return EXIT_SUCCESS;
 }
