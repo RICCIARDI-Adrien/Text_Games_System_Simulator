@@ -3,7 +3,7 @@ PATH_OBJECTS = Objects
 PATH_SOURCES = Sources
 
 CC = gcc
-CCFLAGS = -W -Wall -I$(PATH_INCLUDES)
+CCFLAGS = -W -Wall -I$(PATH_INCLUDES) -pthread
 
 BINARY = Simulator
 OBJECTS = $(PATH_OBJECTS)/Core.o $(PATH_OBJECTS)/Hex_Parser.o $(PATH_OBJECTS)/Log.o $(PATH_OBJECTS)/Main.o $(PATH_OBJECTS)/Program_Memory.o $(PATH_OBJECTS)/Register_File.o
