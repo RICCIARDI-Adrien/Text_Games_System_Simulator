@@ -572,7 +572,7 @@ void CoreExecuteNextInstruction(void)
 		case 0x0009:
 			// Set the INTCON Global Interrupt Enable flag
 			Temp_Byte = RegisterFileRead(REGISTER_FILE_REGISTER_ADDRESS_INTCON); // Get the current INTCON value
-			Temp_Byte |= REGISTER_FILE_REGISTER_BIT_INTCON_GLOBAL_INTERRUPT_ENABLE; // Set GIE bit
+			Temp_Byte |= REGISTER_FILE_REGISTER_BIT_INTCON_GIE; // Set GIE bit
 			RegisterFileWrite(REGISTER_FILE_REGISTER_ADDRESS_INTCON, Temp_Byte); // Set the new INTCON value
 			// Pop the return address
 			Program_Counter = CoreStackPop();
@@ -615,6 +615,16 @@ void CoreExecuteNextInstruction(void)
 	}
 	
 Exit:
+	// Check for interrupt
+	if (RegisterFileHasInterruptFired())
+	{
+		// Push the Program Counter return value (PC + 1)
+		CoreStackPush(Program_Counter + 1);
+		// Branch to the interrupt vector entry point
+		Program_Counter = 0x0004;
+		LOG(LOG_LEVEL_DEBUG, "Interrupt fired. Branching to interrupt vector entry point.\n");
+	}
+
 	// Save the new Program Counter value
 	CoreWriteBack(Program_Counter);
 	LOG(LOG_LEVEL_DEBUG, "Finished instruction execution, new Program Counter value is : 0x%04X.\n", Program_Counter);

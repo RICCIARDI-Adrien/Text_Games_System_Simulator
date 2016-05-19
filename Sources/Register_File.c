@@ -195,3 +195,32 @@ void RegisterFileDump(void)
 	LOG(LOG_LEVEL_DEBUG, "--------+--------+--------+--------+--------\n");
 	for (Address = 0; Address < REGISTER_FILE_REGISTERS_IN_BANK_COUNT; Address++) LOG(LOG_LEVEL_DEBUG, "0x%02X    |  0x%02X  |  0x%02X  |  0x%02X  |  0x%02X\n", Address, Register_File[0][Address].ReadCallback(&Register_File[0][Address].Content), Register_File[1][Address].ReadCallback(&Register_File[1][Address].Content), Register_File[2][Address].ReadCallback(&Register_File[2][Address].Content), Register_File[3][Address].ReadCallback(&Register_File[3][Address].Content));
 }
+
+int RegisterFileHasInterruptFired(void)
+{
+        unsigned char INTCON_Register, PIE1_Register, PIR1_Register;
+
+        // Check flags not depending from PIE bit
+        INTCON_Register = Register_File[REGISTER_FILE_REGISTER_BANK_INTCON][REGISTER_FILE_REGISTER_ADDRESS_INTCON].Content.Data;
+        if (!(INTCON_Register & REGISTER_FILE_REGISTER_BIT_INTCON_GIE)) return 0; // Interrupts are disabled
+        // T0I
+        if (INTCON_Register & (REGISTER_FILE_REGISTER_BIT_INTCON_T0IE | REGISTER_FILE_REGISTER_BIT_INTCON_T0IF)) return 1;
+        // INT
+        if (INTCON_Register & (REGISTER_FILE_REGISTER_BIT_INTCON_INTE | REGISTER_FILE_REGISTER_BIT_INTCON_INTF)) return 1;
+        // RBI
+        if (INTCON_Register & (REGISTER_FILE_REGISTER_BIT_INTCON_RBIE | REGISTER_FILE_REGISTER_BIT_INTCON_RBIF)) return 1;
+
+        // Check peripheral flags
+        if (!(INTCON_Register & REGISTER_FILE_REGISTER_BIT_INTCON_PEIE)) return 0; // Peripheral interrupts are disabled
+        PIE1_Register = Register_File[REGISTER_FILE_REGISTER_BANK_PIE1][REGISTER_FILE_REGISTER_ADDRESS_PIE1].Content.Data;
+	PIR1_Register = Register_File[REGISTER_FILE_REGISTER_BANK_PIR1][REGISTER_FILE_REGISTER_ADDRESS_PIR1].Content.Data;
+	// RCI
+	if ((PIE1_Register & REGISTER_FILE_REGISTER_BIT_PIE1_RCIE) && (PIR1_Register & REGISTER_FILE_REGISTER_BIT_PIR1_RCIF)) return 1;
+	// TXI
+	if ((PIE1_Register & REGISTER_FILE_REGISTER_BIT_PIE1_TXIE) && (PIR1_Register & REGISTER_FILE_REGISTER_BIT_PIR1_TXIF)) return 1;
+
+        // TODO implement other needed peripherals
+
+	return 0;
+}
+
