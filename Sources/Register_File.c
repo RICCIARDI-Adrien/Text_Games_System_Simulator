@@ -3,25 +3,23 @@
  * @author Adrien RICCIARDI
  */
 #include <Log.h>
+#include <Peripheral_UART.h>
 #include <pthread.h>
 #include <Register_File.h>
+#include <stdlib.h>
 
 //-------------------------------------------------------------------------------------------------
 // Private types
 //-------------------------------------------------------------------------------------------------
-typedef union
-{
-	unsigned char Data; //! Store a byte of data.
-	unsigned char *Pointer_Data; //! Locate another data from another register.
-} TRegisterFileRegisterContent;
-
 /** The callback called when a register is read.
+ * @param Pointer_Register_File The register file itself.
  * @param Pointer_Content The register content according to its type.
  * @return The read value.
  */
 typedef unsigned char (*TRegisterFileRegisterReadCallback)(TRegisterFileRegisterContent *Pointer_Content);
 
 /** The callback called when a register is written.
+ * @param Pointer_Register_File The register file itself.
  * @param Pointer_Content The register content according to its type.
  * @param Data The data to write.
  */
@@ -48,6 +46,7 @@ static pthread_mutex_t Register_File_Mutex_Concurrent_Access = PTHREAD_MUTEX_INI
 // Private functions
 //-------------------------------------------------------------------------------------------------
 /** Get the data stored at this register used as RAM storage.
+ * @param Pointer_Register_File The register file itself.
  * @param Pointer_Content The register content.
  * @return The read data.
  */
@@ -57,6 +56,7 @@ static unsigned char RegisterFileNormalRAMRead(TRegisterFileRegisterContent *Poi
 }
 
 /** Write a data to this register used as RAM storage.
+ * @param Pointer_Register_File The register file itself.
  * @param Pointer_Content The register content.
  * @param Data The data to write.
  */
@@ -66,6 +66,7 @@ static void RegisterFileNormalRAMWrite(TRegisterFileRegisterContent *Pointer_Con
 }
 
 /** Read another register data.
+ * @param Pointer_Register_File The register file itself.
  * @param Pointer_Content The physical register to read data from.
  * @return The target register data.
  */
@@ -75,6 +76,7 @@ static unsigned char RegisterFileRemappedRAMRead(TRegisterFileRegisterContent *P
 }
 
 /** Write data to another register.
+ * @param Pointer_Register_File The register file itself.
  * @param Pointer_Content The physical register to write data to.
  * @param Data The data to write.
  */
@@ -160,13 +162,26 @@ void RegisterFileInitialize(void)
 		}
 	}
 	
+	//===============================================
+	// Configure UART registers
+	//===============================================
+	Register_File[REGISTER_FILE_REGISTER_BANK_TXREG][REGISTER_FILE_REGISTER_ADDRESS_TXREG].WriteCallback = PeripheralUARTWriteTXREG;
+	Register_File[REGISTER_FILE_REGISTER_BANK_RCREG][REGISTER_FILE_REGISTER_ADDRESS_RCREG].ReadCallback = PeripheralUARTReadRCREG;
+	
 	// TODO fill needed peripheral special registers
 }
 
-unsigned char RegisterFileRead(unsigned char Address)
+unsigned char RegisterFileBankedRead(unsigned int Address)
 {
 	int Current_Bank, Return_Value;
 	TRegisterFileRegister *Pointer_Register;
+	
+	// Check address correctness
+	if (Address >= REGISTER_FILE_REGISTERS_IN_BANK_COUNT)
+	{
+		LOG(LOG_LEVEL_ERROR, "Error : an instruction tried to read from a non-existing register location (0x%X).\n", Address);
+		exit(EXIT_FAILURE);
+	}
 
 	pthread_mutex_lock(&Register_File_Mutex_Concurrent_Access);
 
@@ -183,10 +198,17 @@ unsigned char RegisterFileRead(unsigned char Address)
 	return Return_Value;
 }
 
-void RegisterFileWrite(unsigned char Address, unsigned char Data)
+void RegisterFileBankedWrite(unsigned int Address, unsigned char Data)
 {
 	int Current_Bank;
 	TRegisterFileRegister *Pointer_Register;
+	
+	// Check address correctness
+	if (Address >= REGISTER_FILE_REGISTERS_IN_BANK_COUNT)
+	{
+		LOG(LOG_LEVEL_ERROR, "Error : an instruction tried to write to a non-existing register location (0x%X).\n", Address);
+		exit(EXIT_FAILURE);
+	}
 
 	pthread_mutex_lock(&Register_File_Mutex_Concurrent_Access);
 
@@ -201,16 +223,120 @@ void RegisterFileWrite(unsigned char Address, unsigned char Data)
 	pthread_mutex_unlock(&Register_File_Mutex_Concurrent_Access);
 }
 
+unsigned char RegisterFileDirectRead(unsigned int Bank, unsigned int Address)
+{
+	int Return_Value;
+	TRegisterFileRegister *Pointer_Register;
+	
+	// Check bank correctness
+	if (Bank >= REGISTER_FILE_BANKS_COUNT)
+	{
+		LOG(LOG_LEVEL_ERROR, "Error : an instruction tried to read from a non-existing bank (%u).\n", Bank);
+		exit(EXIT_FAILURE);
+	}
+	// Check address correctness
+	if (Address >= REGISTER_FILE_REGISTERS_IN_BANK_COUNT)
+	{
+		LOG(LOG_LEVEL_ERROR, "Error : an instruction tried to read from a non-existing register location (0x%X).\n", Address);
+		exit(EXIT_FAILURE);
+	}
+
+	pthread_mutex_lock(&Register_File_Mutex_Concurrent_Access);
+
+	// Get the required register
+	Pointer_Register = &Register_File[Bank][Address];
+	// Get the register content
+	Return_Value = Pointer_Register->ReadCallback(&Pointer_Register->Content);
+
+	pthread_mutex_unlock(&Register_File_Mutex_Concurrent_Access);
+
+	return Return_Value;
+}
+
+void RegisterFileDirectWrite(unsigned int Bank, unsigned int Address, unsigned char Data)
+{
+	TRegisterFileRegister *Pointer_Register;
+	
+	// Check bank correctness
+	if (Bank >= REGISTER_FILE_BANKS_COUNT)
+	{
+		LOG(LOG_LEVEL_ERROR, "Error : an instruction tried to read from a non-existing bank (%u).\n", Bank);
+		exit(EXIT_FAILURE);
+	}
+	// Check address correctness
+	if (Address >= REGISTER_FILE_REGISTERS_IN_BANK_COUNT)
+	{
+		LOG(LOG_LEVEL_ERROR, "Error : an instruction tried to write to a non-existing register location (0x%X).\n", Address);
+		exit(EXIT_FAILURE);
+	}
+
+	pthread_mutex_lock(&Register_File_Mutex_Concurrent_Access);
+
+	// Get the required register
+	Pointer_Register = &Register_File[Bank][Address];
+	// Set the register content
+	Pointer_Register->WriteCallback(&Pointer_Register->Content, Data);
+
+	pthread_mutex_unlock(&Register_File_Mutex_Concurrent_Access);
+}
+
+unsigned char RegisterFileDirectReadFromCallback(unsigned int Bank, unsigned int Address)
+{
+	TRegisterFileRegister *Pointer_Register;
+	
+	// Check bank correctness
+	if (Bank >= REGISTER_FILE_BANKS_COUNT)
+	{
+		LOG(LOG_LEVEL_ERROR, "Error : an instruction tried to read from a non-existing bank (%u).\n", Bank);
+		exit(EXIT_FAILURE);
+	}
+	// Check address correctness
+	if (Address >= REGISTER_FILE_REGISTERS_IN_BANK_COUNT)
+	{
+		LOG(LOG_LEVEL_ERROR, "Error : an instruction tried to read from a non-existing register location (0x%X).\n", Address);
+		exit(EXIT_FAILURE);
+	}
+
+	// Get the required register
+	Pointer_Register = &Register_File[Bank][Address];
+
+	// Get the register content
+	return Pointer_Register->ReadCallback(&Pointer_Register->Content);
+}
+
+void RegisterFileDirectWriteFromCallback(unsigned int Bank, unsigned int Address, unsigned char Data)
+{
+	TRegisterFileRegister *Pointer_Register;
+	
+	// Check bank correctness
+	if (Bank >= REGISTER_FILE_BANKS_COUNT)
+	{
+		LOG(LOG_LEVEL_ERROR, "Error : an instruction tried to read from a non-existing bank (%u).\n", Bank);
+		exit(EXIT_FAILURE);
+	}
+	// Check address correctness
+	if (Address >= REGISTER_FILE_REGISTERS_IN_BANK_COUNT)
+	{
+		LOG(LOG_LEVEL_ERROR, "Error : an instruction tried to write to a non-existing register location (0x%X).\n", Address);
+		exit(EXIT_FAILURE);
+	}
+
+	// Get the required register
+	Pointer_Register = &Register_File[Bank][Address];
+	// Set the register content
+	Pointer_Register->WriteCallback(&Pointer_Register->Content, Data);
+}
+
 void RegisterFileDump(void)
 {
 	int Address;
 
-	LOG(LOG_LEVEL_DEBUG, "Address | Bank 0 | Bank 1 | Bank 2 | Bank 3\n");
-	LOG(LOG_LEVEL_DEBUG, "--------+--------+--------+--------+--------\n");
+	LOG(LOG_LEVEL_ERROR, "Address | Bank 0 | Bank 1 | Bank 2 | Bank 3\n");
+	LOG(LOG_LEVEL_ERROR, "--------+--------+--------+--------+--------\n");
 
 	pthread_mutex_lock(&Register_File_Mutex_Concurrent_Access);
 
-	for (Address = 0; Address < REGISTER_FILE_REGISTERS_IN_BANK_COUNT; Address++) LOG(LOG_LEVEL_DEBUG, "0x%02X    |  0x%02X  |  0x%02X  |  0x%02X  |  0x%02X\n", Address, Register_File[0][Address].ReadCallback(&Register_File[0][Address].Content), Register_File[1][Address].ReadCallback(&Register_File[1][Address].Content), Register_File[2][Address].ReadCallback(&Register_File[2][Address].Content), Register_File[3][Address].ReadCallback(&Register_File[3][Address].Content));
+	for (Address = 0; Address < REGISTER_FILE_REGISTERS_IN_BANK_COUNT; Address++) LOG(LOG_LEVEL_ERROR, "0x%02X    |  0x%02X  |  0x%02X  |  0x%02X  |  0x%02X\n", Address, Register_File[0][Address].ReadCallback(&Register_File[0][Address].Content), Register_File[1][Address].ReadCallback(&Register_File[1][Address].Content), Register_File[2][Address].ReadCallback(&Register_File[2][Address].Content), Register_File[3][Address].ReadCallback(&Register_File[3][Address].Content));
 
 	pthread_mutex_unlock(&Register_File_Mutex_Concurrent_Access);
 }
@@ -245,7 +371,11 @@ int RegisterFileHasInterruptFired(void)
 	PIE1_Register = Register_File[REGISTER_FILE_REGISTER_BANK_PIE1][REGISTER_FILE_REGISTER_ADDRESS_PIE1].Content.Data;
 	PIR1_Register = Register_File[REGISTER_FILE_REGISTER_BANK_PIR1][REGISTER_FILE_REGISTER_ADDRESS_PIR1].Content.Data;
 	// RCI
-	if ((PIE1_Register & REGISTER_FILE_REGISTER_BIT_PIE1_RCIE) && (PIR1_Register & REGISTER_FILE_REGISTER_BIT_PIR1_RCIF)) goto Exit;
+	if ((PIE1_Register & REGISTER_FILE_REGISTER_BIT_PIE1_RCIE) && (PIR1_Register & REGISTER_FILE_REGISTER_BIT_PIR1_RCIF))
+	{
+		LOG(LOG_LEVEL_DEBUG, "UART reception interrupt.\n");
+		goto Exit;
+	}
 	// TXI
 	if ((PIE1_Register & REGISTER_FILE_REGISTER_BIT_PIE1_TXIE) && (PIR1_Register & REGISTER_FILE_REGISTER_BIT_PIR1_TXIF)) goto Exit;
 

@@ -22,12 +22,16 @@
 #define REGISTER_FILE_REGISTER_ADDRESS_INTCON 0x0B // Replicated in all other banks
 #define REGISTER_FILE_REGISTER_ADDRESS_PIR1 0x0C
 #define REGISTER_FILE_REGISTER_ADDRESS_PIE1 0x0C
+#define REGISTER_FILE_REGISTER_ADDRESS_TXREG 0x19
+#define REGISTER_FILE_REGISTER_ADDRESS_RCREG 0x1A
 
 // All register banks
 // TODO define missing ones when needed
 #define REGISTER_FILE_REGISTER_BANK_INTCON 0 // The real data byte is stored in bank 0, the replicated registers all point to this bank
 #define REGISTER_FILE_REGISTER_BANK_PIR1 0
 #define REGISTER_FILE_REGISTER_BANK_PIE1 1
+#define REGISTER_FILE_REGISTER_BANK_TXREG 0
+#define REGISTER_FILE_REGISTER_BANK_RCREG 0
 
 /** STATUS register Carry flag. */
 #define REGISTER_FILE_REGISTER_BIT_STATUS_CARRY (1 << 0)
@@ -64,22 +68,65 @@
 #define REGISTER_FILE_REGISTER_BIT_PIR1_TXIF (1 << 4)
 
 //-------------------------------------------------------------------------------------------------
+// Types
+//-------------------------------------------------------------------------------------------------
+typedef union
+{
+	unsigned char Data; //! Store a byte of data.
+	unsigned char *Pointer_Data; //! Locate another data from another register.
+} TRegisterFileRegisterContent;
+
+//-------------------------------------------------------------------------------------------------
 // Functions
 //-------------------------------------------------------------------------------------------------
 /** Configure the register file and all Special Function Registers. */
 void RegisterFileInitialize(void);
 
-/** Read a byte from the specified address.
- * @param Address The address bits 7..0, bits 9..8 are located in the STATUS register.
+/** Read a byte from the specified address in the current bank.
+ * @param Address The address bits 6..0, bits 8..7 are located in the STATUS register.
  * @return The read data.
+ * @note This function is protected against concurrent access and can be used everywhere but in register callback functions.
  */
-unsigned char RegisterFileRead(unsigned char Address);
+unsigned char RegisterFileBankedRead(unsigned int Address);
 
-/** Write a byte of data to the specified address.
- * @param Address The address bits 7..0, bits 9..8 are located in the STATUS register.
+/** Write a byte of data to the specified address in the current bank.
+ * @param Address The address bits 6..0, bits 8..7 are located in the STATUS register.
  * @param Data The data to write.
+ * @note This function is protected against concurrent access and can be used everywhere but in register callback functions.
  */
-void RegisterFileWrite(unsigned char Address, unsigned char Data);
+void RegisterFileBankedWrite(unsigned int Address, unsigned char Data);
+
+/** Read a byte from the specified address in the specified bank.
+ * @param Bank The bank number.
+ * @param Address The address to read from.
+ * @return The read data.
+ * @note This function is protected against concurrent access and can be used everywhere but in register callback functions.
+ */
+unsigned char RegisterFileDirectRead(unsigned int Bank, unsigned int Address);
+
+/** Write a byte of data to the specified address in the specified bank.
+ * @param Bank The bank number.
+ * @param Address The address to write to.
+ * @param Data The data to write.
+ * @note This function is protected against concurrent access and can be used everywhere but in register callback functions.
+ */
+void RegisterFileDirectWrite(unsigned int Bank, unsigned int Address, unsigned char Data);
+
+/** Read a byte from the specified address in the specified bank.
+ * @param Bank The bank number.
+ * @param Address The address to read from.
+ * @return The read data.
+ * @note This function is not protected against concurrent access and should be used only in register callback functions.
+ */
+unsigned char RegisterFileDirectReadFromCallback(unsigned int Bank, unsigned int Address);
+
+/** Write a byte of data to the specified address in the specified bank.
+ * @param Bank The bank number.
+ * @param Address The address to write to.
+ * @param Data The data to write.
+ * @note This function is not protected against concurrent access and should be used only in register callback functions.
+ */
+void RegisterFileDirectWriteFromCallback(unsigned int Bank, unsigned int Address, unsigned char Data);
 
 /** Dump the whole register file content. */
 void RegisterFileDump(void);

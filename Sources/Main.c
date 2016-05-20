@@ -5,12 +5,22 @@
 #include <Core.h>
 #include <errno.h>
 #include <Log.h>
+#include <Peripheral_UART.h>
 #include <Program_Memory.h>
 #include <pthread.h>
 #include <Register_File.h>
 #include <stdio.h>
 #include <stdlib.h>
 #include <string.h>
+
+//-------------------------------------------------------------------------------------------------
+// Private constants
+//-------------------------------------------------------------------------------------------------
+/** Convert a Ctrl+key combination to the corresponding value returned by getchar().
+ * @param Key The key to associate to Ctrl.
+ * @return The corresponding getchar() code.
+ */
+#define MAIN_CONTROL_KEY_COMBINATION(Key) (Key & 0x1F)
 
 //-------------------------------------------------------------------------------------------------
 // Private variables
@@ -24,7 +34,7 @@ static volatile int Main_Is_Simulator_Exiting = 0;
 /** Do not display typed in text and disable all default console features. */
 static inline void MainInitializeConsole(void)
 {
-        system("stty raw -echo");
+	system("stty raw -echo");
 }
 
 /** Restore the console default behavior. */
@@ -62,7 +72,8 @@ int main(int argc, char *argv[])
 		printf("Usage : %s Log_File Log_Level Program_Hex_File\n"
 			"  Log_File : the file that will contain all logs.\n"
 			"  Log_Level : how much log to write to the log file (error = 0, warning = 1, debug = 2).\n"
-			"  Program_Hex_File : an Intel Hex file containing the program code.\n", argv[0]);
+			"  Program_Hex_File : an Intel Hex file containing the program code.\n"
+			"Use Ctrl+C to exit program.\n", argv[0]);
 		return EXIT_FAILURE;
 	}
 	
@@ -99,10 +110,14 @@ int main(int argc, char *argv[])
 	while (1)
 	{
 		Character_Code = getchar();
-		if (Character_Code == 3) break; // Ctrl+C
-	}
-	MainUninitializeConsole();
+		if (Character_Code == MAIN_CONTROL_KEY_COMBINATION('c')) break; // Ctrl+c
+		else if (Character_Code == MAIN_CONTROL_KEY_COMBINATION('d')) RegisterFileDump(); // Ctrl+d, stands for "dump"
 
+		// Send the character to the UART
+		PeripheralUARTReceiveByte((unsigned char) Character_Code);
+	}
+	MainUninitializeConsole(); // TODO this function and below code are not reached when the simulator must do an emergency exit
+	
 	// Wait for the thread to terminate
 	Main_Is_Simulator_Exiting = 1;
 	if (pthread_join(Thread_ID, NULL) != 0)
