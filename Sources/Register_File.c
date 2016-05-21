@@ -210,6 +210,7 @@ void RegisterFileInitialize(void)
 	//===============================================
 	// Configure UART registers
 	//===============================================
+	Register_File[REGISTER_FILE_REGISTER_BANK_TXSTA][REGISTER_FILE_REGISTER_ADDRESS_TXSTA].WriteCallback = PeripheralUARTWriteTXSTA;
 	Register_File[REGISTER_FILE_REGISTER_BANK_TXREG][REGISTER_FILE_REGISTER_ADDRESS_TXREG].WriteCallback = PeripheralUARTWriteTXREG;
 	Register_File[REGISTER_FILE_REGISTER_BANK_RCREG][REGISTER_FILE_REGISTER_ADDRESS_RCREG].ReadCallback = PeripheralUARTReadRCREG;
 	

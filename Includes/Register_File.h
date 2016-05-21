@@ -23,6 +23,7 @@
 #define REGISTER_FILE_REGISTER_ADDRESS_INTCON 0x0B // Replicated in all other banks
 #define REGISTER_FILE_REGISTER_ADDRESS_PIR1 0x0C
 #define REGISTER_FILE_REGISTER_ADDRESS_PIE1 0x0C
+#define REGISTER_FILE_REGISTER_ADDRESS_TXSTA 0x18
 #define REGISTER_FILE_REGISTER_ADDRESS_TXREG 0x19
 #define REGISTER_FILE_REGISTER_ADDRESS_RCREG 0x1A
 
@@ -33,6 +34,7 @@
 #define REGISTER_FILE_REGISTER_BANK_INTCON 0 // The real data byte is stored in bank 0, the replicated registers all point to this bank
 #define REGISTER_FILE_REGISTER_BANK_PIR1 0
 #define REGISTER_FILE_REGISTER_BANK_PIE1 1
+#define REGISTER_FILE_REGISTER_BANK_TXSTA 1
 #define REGISTER_FILE_REGISTER_BANK_TXREG 0
 #define REGISTER_FILE_REGISTER_BANK_RCREG 0
 
@@ -62,15 +64,18 @@
 /** INTCON register RB Port Change Interrupt Flag bit. */
 #define REGISTER_FILE_REGISTER_BIT_INTCON_RBIF (1 << 0)
 
+/** PIR1 register USART Receive Interrupt Enable bit. */
+#define REGISTER_FILE_REGISTER_BIT_PIR1_RCIF (1 << 5)
+/** PIR1 register USART Transmit Interrupt Enable bit. */
+#define REGISTER_FILE_REGISTER_BIT_PIR1_TXIF (1 << 4)
+
 /** PIE1 register USART Receive Interrupt Enable bit. */
 #define REGISTER_FILE_REGISTER_BIT_PIE1_RCIE (1 << 5)
 /** PIE1 register USART Transmit Interrupt Enable bit. */
 #define REGISTER_FILE_REGISTER_BIT_PIE1_TXIE (1 << 4)
 
-/** PIR1 register USART Receive Interrupt Enable bit. */
-#define REGISTER_FILE_REGISTER_BIT_PIR1_RCIF (1 << 5)
-/** PIR1 register USART Transmit Interrupt Enable bit. */
-#define REGISTER_FILE_REGISTER_BIT_PIR1_TXIF (1 << 4)
+/** TXSTA register Transmit Enable bit. */
+#define REGISTER_FILE_REGISTER_BIT_TXSTA_TXEN (1 << 5)
 
 //-------------------------------------------------------------------------------------------------
 // Types

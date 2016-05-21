@@ -22,6 +22,12 @@ unsigned char PeripheralUARTReadRCREG(TRegisterFileRegisterContent *Pointer_Cont
  */
 void PeripheralUARTWriteTXREG(TRegisterFileRegisterContent *Pointer_Content, unsigned char Data);
 
+/** The callback that must be called when the TXSTA register is written.
+ * @param Pointer_Content The register content.
+ * @param Data The TXSTA value.
+ */
+void PeripheralUARTWriteTXSTA(TRegisterFileRegisterContent *Pointer_Content, unsigned char Data);
+
 /** Send a byte to the PIC UART.
  * @param Data The received data.
  */
