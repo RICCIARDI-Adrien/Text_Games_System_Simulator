@@ -256,6 +256,9 @@ void CoreExecuteNextInstruction(void)
 			Temp_Byte = RegisterFileBankedRead(Byte_Operand_2);
 			// Do the operation
 			Temp_Word = Temp_Byte - Core_Register_W;
+			// Invert carry value to get borrow
+			if (Temp_Word & 0x0100) Temp_Word &= ~0x0100;
+			else Temp_Word |= 0x0100;
 			// Handle STATUS flags
 			CoreUpdateStatusRegister(Temp_Word, CORE_AFFECTED_FLAG_CARRY | CORE_AFFECTED_FLAG_DIGIT_CARRY | CORE_AFFECTED_FLAG_ZERO);
 			// Update the right destination register
@@ -563,8 +566,11 @@ void CoreExecuteNextInstruction(void)
 		// SUBLW
 		case 0x3C:
 			// Compute the subtraction on a greater number of bits to find out a borrow report
-			Temp_Word = Core_Register_W - Byte_Operand_1;
+			Temp_Word = Byte_Operand_1 - Core_Register_W;
 			Core_Register_W = (unsigned char) Temp_Word;
+			// Invert carry value to get borrow
+			if (Temp_Word & 0x0100) Temp_Word &= ~0x0100;
+			else Temp_Word |= 0x0100;
 			// Handle STATUS flags
 			CoreUpdateStatusRegister(Temp_Word, CORE_AFFECTED_FLAG_CARRY | CORE_AFFECTED_FLAG_DIGIT_CARRY | CORE_AFFECTED_FLAG_ZERO);
 			// Point on next instruction
