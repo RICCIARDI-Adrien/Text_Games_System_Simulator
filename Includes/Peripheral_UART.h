@@ -11,14 +11,12 @@
 // Functions
 //-------------------------------------------------------------------------------------------------
 /** The callback that must be called when the RCREG is read.
- * @param Pointer_Register_File The register file itself.
  * @param Pointer_Content The register content.
  * @return The last UART received byte.
  */
 unsigned char PeripheralUARTReadRCREG(TRegisterFileRegisterContent *Pointer_Content);
 
 /** The callback that must be called when the TXREG register is written.
- * @param Pointer_Register_File The register file itself.
  * @param Pointer_Content The register content.
  * @param Data The data byte to send over the UART.
  */

@@ -12,14 +12,12 @@
 // Private types
 //-------------------------------------------------------------------------------------------------
 /** The callback called when a register is read.
- * @param Pointer_Register_File The register file itself.
  * @param Pointer_Content The register content according to its type.
  * @return The read value.
  */
 typedef unsigned char (*TRegisterFileRegisterReadCallback)(TRegisterFileRegisterContent *Pointer_Content);
 
 /** The callback called when a register is written.
- * @param Pointer_Register_File The register file itself.
  * @param Pointer_Content The register content according to its type.
  * @param Data The data to write.
  */
@@ -46,7 +44,6 @@ static pthread_mutex_t Register_File_Mutex_Concurrent_Access = PTHREAD_MUTEX_INI
 // Private functions
 //-------------------------------------------------------------------------------------------------
 /** Get the data stored at this register used as RAM storage.
- * @param Pointer_Register_File The register file itself.
  * @param Pointer_Content The register content.
  * @return The read data.
  */
@@ -56,7 +53,6 @@ static unsigned char RegisterFileNormalRAMRead(TRegisterFileRegisterContent *Poi
 }
 
 /** Write a data to this register used as RAM storage.
- * @param Pointer_Register_File The register file itself.
  * @param Pointer_Content The register content.
  * @param Data The data to write.
  */
@@ -66,7 +62,6 @@ static void RegisterFileNormalRAMWrite(TRegisterFileRegisterContent *Pointer_Con
 }
 
 /** Read another register data.
- * @param Pointer_Register_File The register file itself.
  * @param Pointer_Content The physical register to read data from.
  * @return The target register data.
  */
@@ -76,13 +71,56 @@ static unsigned char RegisterFileRemappedRAMRead(TRegisterFileRegisterContent *P
 }
 
 /** Write data to another register.
- * @param Pointer_Register_File The register file itself.
  * @param Pointer_Content The physical register to write data to.
  * @param Data The data to write.
  */
 static void RegisterFileRemappedRAMWrite(TRegisterFileRegisterContent *Pointer_Content, unsigned char Data)
 {
 	*(Pointer_Content->Pointer_Data) = Data;
+}
+
+/** Read the register pointed by the FSR register and the IRP bit.
+ * @param Pointer_Content Not used here.
+ * @return The target register data.
+ */
+static unsigned char RegisterFileIndirectRead(TRegisterFileRegisterContent __attribute__((unused)) *Pointer_Content)
+{
+	unsigned char Bank, Address;
+	
+	// Get IRP bit value
+	Bank = (Register_File[REGISTER_FILE_REGISTER_BANK_STATUS][REGISTER_FILE_REGISTER_ADDRESS_STATUS].Content.Data & REGISTER_FILE_REGISTER_BIT_STATUS_IRP) >> 6; // Set the bank high bit
+	
+	// Get the register address from FSR
+	Address = Register_File[REGISTER_FILE_REGISTER_BANK_FSR][REGISTER_FILE_REGISTER_ADDRESS_FSR].Content.Data;
+	
+	// The FSR most significant bit is the bank number least significant bit
+	Bank |= (Address >> 7) & 0x01;
+	Address &= 0x7F; // Remove the most significant bit
+	
+	// Get the pointed register value
+	return Register_File[Bank][Address].Content.Data;
+}
+
+/** Write data to the register pointed bu FSR register and the IRP bit.
+ * @param Pointer_Content The physical register to write data to.
+ * @param Data The data to write to the pointed register.
+ */
+static void RegisterFileIndirectWrite(TRegisterFileRegisterContent __attribute__((unused)) *Pointer_Content, unsigned char Data)
+{
+	unsigned char Bank, Address;
+	
+	// Get IRP bit value
+	Bank = (Register_File[REGISTER_FILE_REGISTER_BANK_STATUS][REGISTER_FILE_REGISTER_ADDRESS_STATUS].Content.Data & REGISTER_FILE_REGISTER_BIT_STATUS_IRP) >> 6; // Set the bank high bit
+	
+	// Get the register address from FSR
+	Address = Register_File[REGISTER_FILE_REGISTER_BANK_FSR][REGISTER_FILE_REGISTER_ADDRESS_FSR].Content.Data;
+	
+	// The FSR most significant bit is the bank number least significant bit
+	Bank |= (Address >> 7) & 0x01;
+	Address &= 0x7F; // Remove the most significant bit
+	
+	// Write data to the pointed register
+	Register_File[Bank][Address].Content.Data = Data;
 }
 
 //-------------------------------------------------------------------------------------------------
@@ -106,6 +144,13 @@ void RegisterFileInitialize(void)
 	//===============================================
 	// Configure core registers
 	//===============================================
+	// Set INDF register special callback
+	for (Bank = 0; Bank < REGISTER_FILE_BANKS_COUNT; Bank++)
+	{
+		Register_File[Bank][REGISTER_FILE_REGISTER_ADDRESS_INDF].ReadCallback = RegisterFileIndirectRead;
+		Register_File[Bank][REGISTER_FILE_REGISTER_ADDRESS_INDF].WriteCallback = RegisterFileIndirectWrite;
+	}
+	
 	// Remap PCL register data from bank 1 to 3 to bank 0
 	for (Bank = 1; Bank < REGISTER_FILE_BANKS_COUNT; Bank++)
 	{
@@ -356,11 +401,23 @@ int RegisterFileHasInterruptFired(void)
 		goto Exit;
 	}
 	// T0I
-	if (INTCON_Register & (REGISTER_FILE_REGISTER_BIT_INTCON_T0IE | REGISTER_FILE_REGISTER_BIT_INTCON_T0IF)) goto Exit;
+	if (INTCON_Register & (REGISTER_FILE_REGISTER_BIT_INTCON_T0IE | REGISTER_FILE_REGISTER_BIT_INTCON_T0IF))
+	{
+		LOG(LOG_LEVEL_DEBUG, "Timer 0 overflow interrupt.\n");
+		goto Exit;
+	}
 	// INT
-	if (INTCON_Register & (REGISTER_FILE_REGISTER_BIT_INTCON_INTE | REGISTER_FILE_REGISTER_BIT_INTCON_INTF)) goto Exit;
+	if (INTCON_Register & (REGISTER_FILE_REGISTER_BIT_INTCON_INTE | REGISTER_FILE_REGISTER_BIT_INTCON_INTF))
+	{
+		LOG(LOG_LEVEL_DEBUG, "RB0 pin external interrupt.\n");
+		goto Exit;
+	}
 	// RBI
-	if (INTCON_Register & (REGISTER_FILE_REGISTER_BIT_INTCON_RBIE | REGISTER_FILE_REGISTER_BIT_INTCON_RBIF)) goto Exit;
+	if (INTCON_Register & (REGISTER_FILE_REGISTER_BIT_INTCON_RBIE | REGISTER_FILE_REGISTER_BIT_INTCON_RBIF))
+	{
+		LOG(LOG_LEVEL_DEBUG, "Port B pin change interrupt.\n");
+		goto Exit;
+	}
 
 	// Check peripheral flags
 	if (!(INTCON_Register & REGISTER_FILE_REGISTER_BIT_INTCON_PEIE))
@@ -377,7 +434,11 @@ int RegisterFileHasInterruptFired(void)
 		goto Exit;
 	}
 	// TXI
-	if ((PIE1_Register & REGISTER_FILE_REGISTER_BIT_PIE1_TXIE) && (PIR1_Register & REGISTER_FILE_REGISTER_BIT_PIR1_TXIF)) goto Exit;
+	if ((PIE1_Register & REGISTER_FILE_REGISTER_BIT_PIE1_TXIE) && (PIR1_Register & REGISTER_FILE_REGISTER_BIT_PIR1_TXIF))
+	{
+		LOG(LOG_LEVEL_DEBUG, "UART transmission interrupt.\n");
+		goto Exit;
+	}
 
 	// TODO implement other needed peripherals
 

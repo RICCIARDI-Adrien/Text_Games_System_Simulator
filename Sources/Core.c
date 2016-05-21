@@ -102,22 +102,22 @@ static void CoreUpdateStatusRegister(unsigned short Operation_Result, int Affect
 	// Check for carry report
 	if (Affected_Flags_Bitmask & CORE_AFFECTED_FLAG_CARRY)
 	{
-		if (Operation_Result & 0x0100) Status_Register |= REGISTER_FILE_REGISTER_BIT_STATUS_CARRY;
-		else Status_Register &= ~REGISTER_FILE_REGISTER_BIT_STATUS_CARRY;
+		if (Operation_Result & 0x0100) Status_Register |= REGISTER_FILE_REGISTER_BIT_STATUS_C;
+		else Status_Register &= ~REGISTER_FILE_REGISTER_BIT_STATUS_C;
 	}
 	
 	// Check for digit carry report
 	if (Affected_Flags_Bitmask & CORE_AFFECTED_FLAG_DIGIT_CARRY)
 	{
-		if (Operation_Result & 0x0010) Status_Register |= REGISTER_FILE_REGISTER_BIT_STATUS_DIGIT_CARRY;
-		else Status_Register &= ~REGISTER_FILE_REGISTER_BIT_STATUS_DIGIT_CARRY;
+		if (Operation_Result & 0x0010) Status_Register |= REGISTER_FILE_REGISTER_BIT_STATUS_DC;
+		else Status_Register &= ~REGISTER_FILE_REGISTER_BIT_STATUS_DC;
 	}
 	
 	// Check for the Zero flag
 	if (Affected_Flags_Bitmask & CORE_AFFECTED_FLAG_ZERO)
 	{
-		if ((unsigned char) Operation_Result == 0) Status_Register |= REGISTER_FILE_REGISTER_BIT_STATUS_ZERO;
-		else Status_Register &= ~REGISTER_FILE_REGISTER_BIT_STATUS_ZERO;
+		if ((unsigned char) Operation_Result == 0) Status_Register |= REGISTER_FILE_REGISTER_BIT_STATUS_Z;
+		else Status_Register &= ~REGISTER_FILE_REGISTER_BIT_STATUS_Z;
 	}
 	
 	// Update the STATUS register value
@@ -140,7 +140,7 @@ void CoreExecuteNextInstruction(void)
 	// Decode and execute the instruction
 	
 	// One 3-bit operand followed by one 7-bit operand instruction format
-	Byte_Operand_1 = (unsigned char) ((Instruction >> 7) & 0x0003); // Get the first operand
+	Byte_Operand_1 = (unsigned char) ((Instruction >> 7) & 0x0007); // Get the first operand
 	Byte_Operand_2 = (unsigned char) (Instruction & 0x007F); // Get the second operand
 	switch ((Instruction >> 10) & 0x000F)
 	{
@@ -381,7 +381,7 @@ void CoreExecuteNextInstruction(void)
 			// Do the operation
 			Temp_Byte >>= 1;
 			// Put the current carry bit value at the operand most significant bit position
-			Current_Carry_Value = RegisterFileBankedRead(REGISTER_FILE_REGISTER_ADDRESS_STATUS) & REGISTER_FILE_REGISTER_BIT_STATUS_CARRY;
+			Current_Carry_Value = RegisterFileBankedRead(REGISTER_FILE_REGISTER_ADDRESS_STATUS) & REGISTER_FILE_REGISTER_BIT_STATUS_C;
 			if (Current_Carry_Value != 0) Temp_Byte |= 0x80;
 			// Update STATUS carry flag using a little hack
 			if (New_Carry_Value != 0) Temp_Word = 0x0100;
@@ -404,7 +404,7 @@ void CoreExecuteNextInstruction(void)
 			// Do the operation
 			Temp_Byte <<= 1;
 			// Put the current carry bit value at the operand least significant bit position
-			Current_Carry_Value = RegisterFileBankedRead(REGISTER_FILE_REGISTER_ADDRESS_STATUS) & REGISTER_FILE_REGISTER_BIT_STATUS_CARRY; 
+			Current_Carry_Value = RegisterFileBankedRead(REGISTER_FILE_REGISTER_ADDRESS_STATUS) & REGISTER_FILE_REGISTER_BIT_STATUS_C; 
 			if (Current_Carry_Value != 0) Temp_Byte |= 0x01;
 			// Update STATUS carry flag using a little hack
 			if (New_Carry_Value != 0) Temp_Word = 0x0100;
@@ -619,11 +619,16 @@ Exit:
 	// Check for interrupt
 	if (RegisterFileHasInterruptFired())
 	{
+		// Disable the interrupts to avoid looping to the interrupt handler at each instruction
+		Temp_Byte = RegisterFileBankedRead(REGISTER_FILE_REGISTER_ADDRESS_INTCON);
+		Temp_Byte &= ~REGISTER_FILE_REGISTER_BIT_INTCON_GIE;
+		RegisterFileBankedWrite(REGISTER_FILE_REGISTER_ADDRESS_INTCON, Temp_Byte);
+		
 		// Push the Program Counter return value (PC + 1)
 		CoreStackPush(Program_Counter + 1);
-		// Branch to the interrupt vector entry point
+		// Branch to the interrupt handler entry point
 		Program_Counter = 0x0004;
-		LOG(LOG_LEVEL_DEBUG, "Interrupt fired. Branching to interrupt vector entry point.\n");
+		LOG(LOG_LEVEL_DEBUG, "Interrupt fired. Branching to interrupt handler entry point.\n");
 	}
 
 	// Save the new Program Counter value

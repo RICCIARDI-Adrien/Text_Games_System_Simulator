@@ -15,6 +15,7 @@
 
 // All register addresses (addresses are relative to the beginning of the register bank)
 // TODO define missing ones when needed
+#define REGISTER_FILE_REGISTER_ADDRESS_INDF 0x00 // Replicated in all other banks, special behavior
 #define REGISTER_FILE_REGISTER_ADDRESS_PCL 0x02 // Replicated in all other banks
 #define REGISTER_FILE_REGISTER_ADDRESS_STATUS 0x03 // Replicated in all other banks
 #define REGISTER_FILE_REGISTER_ADDRESS_FSR 0x04 // Replicated in all other banks
@@ -27,18 +28,22 @@
 
 // All register banks
 // TODO define missing ones when needed
+#define REGISTER_FILE_REGISTER_BANK_STATUS 0 // The real data byte is stored in bank 0, the replicated registers all point to this bank
+#define REGISTER_FILE_REGISTER_BANK_FSR 0 // The real data byte is stored in bank 0, the replicated registers all point to this bank
 #define REGISTER_FILE_REGISTER_BANK_INTCON 0 // The real data byte is stored in bank 0, the replicated registers all point to this bank
 #define REGISTER_FILE_REGISTER_BANK_PIR1 0
 #define REGISTER_FILE_REGISTER_BANK_PIE1 1
 #define REGISTER_FILE_REGISTER_BANK_TXREG 0
 #define REGISTER_FILE_REGISTER_BANK_RCREG 0
 
-/** STATUS register Carry flag. */
-#define REGISTER_FILE_REGISTER_BIT_STATUS_CARRY (1 << 0)
-/** STATUS register Digit Carry flag. */
-#define REGISTER_FILE_REGISTER_BIT_STATUS_DIGIT_CARRY (1 << 1)
-/** STATUS register Zero flag. */
-#define REGISTER_FILE_REGISTER_BIT_STATUS_ZERO (1 << 2)
+/** STATUS register Register Bank Select bit. */
+#define REGISTER_FILE_REGISTER_BIT_STATUS_IRP (1 << 7)
+/** STATUS register Zero bit. */
+#define REGISTER_FILE_REGISTER_BIT_STATUS_Z (1 << 2)
+/** STATUS register Digit carry/borrow bit. */
+#define REGISTER_FILE_REGISTER_BIT_STATUS_DC (1 << 1)
+/** STATUS register Carry/borrow bit. */
+#define REGISTER_FILE_REGISTER_BIT_STATUS_C (1 << 0)
 
 /** INTCON register Global Interrupt Enable bit. */
 #define REGISTER_FILE_REGISTER_BIT_INTCON_GIE (1 << 7)
