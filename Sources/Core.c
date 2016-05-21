@@ -28,6 +28,10 @@ static int Core_Stack_Pointer = 0;
 /** The working register. */
 static unsigned char Core_Register_W;
 
+/** The program counter. */
+// TODO update program counter if PCL register is explicitly written
+static unsigned short Core_Program_Counter = 0;
+
 //-------------------------------------------------------------------------------------------------
 // Private functions
 //-------------------------------------------------------------------------------------------------
@@ -59,32 +63,6 @@ static unsigned short CoreStackPop(void)
 	
 	Core_Stack_Pointer--;
 	return Core_Stack[Core_Stack_Pointer];
-}
-
-/** Fetch the instruction pointed by the program counter.
- * @param Pointer_Instruction On output, contain the fetched instruction.
- * @param Pointer_Program_Counter On output, contain the Program Counter current value.
- */
-static void CoreFetchNextInstruction(unsigned short *Pointer_Instruction, unsigned short *Pointer_Program_Counter)
-{
-	unsigned short Program_Counter, Instruction;
-	
-	// Retrieve the program counter value
-	Program_Counter = ((RegisterFileBankedRead(REGISTER_FILE_REGISTER_ADDRESS_PCLATH) & 0x1F) << 8) | RegisterFileBankedRead(REGISTER_FILE_REGISTER_ADDRESS_PCL);
-	// Retrieve the instruction
-	Instruction = ProgramMemoryRead(Program_Counter);
-	
-	*Pointer_Instruction = Instruction;
-	*Pointer_Program_Counter = Program_Counter;
-}
-
-/** Write the new Program Counter value.
- * @param Program_Counter The updated Program Counter value to write to the register file.
- */
-static void CoreWriteBack(unsigned short Program_Counter)
-{
-	RegisterFileBankedWrite(REGISTER_FILE_REGISTER_ADDRESS_PCLATH, (Program_Counter >> 8) & 0x1F); // Bits 7..5 must be read as zero
-	RegisterFileBankedWrite(REGISTER_FILE_REGISTER_ADDRESS_PCL, (unsigned char) Program_Counter);
 }
 
 /** Update the STATUS register flags according to the result of an operation.
@@ -131,13 +109,69 @@ static void CoreUpdateStatusRegister(unsigned short Operation_Result, int Affect
 void CoreExecuteNextInstruction(void)
 {
 	unsigned char Byte_Operand_1, Byte_Operand_2, Temp_Byte, Current_Carry_Value, New_Carry_Value;
-	unsigned short Instruction, Program_Counter, Temp_Word, Word_Operand;
+	unsigned short Instruction, Temp_Word, Word_Operand;
 	
 	// Fetch the next instruction
-	CoreFetchNextInstruction(&Instruction, &Program_Counter);
-	LOG(LOG_LEVEL_DEBUG, "Fetched next instruction at PC = 0x%04X, instruction : 0x%04X.\n", Program_Counter, Instruction);
+	Instruction = ProgramMemoryRead(Core_Program_Counter);
+	LOG(LOG_LEVEL_DEBUG, "Fetched next instruction at PC = 0x%04X, instruction : 0x%04X.\n", Core_Program_Counter, Instruction);
 	
 	// Decode and execute the instruction
+	
+	// No operand instruction format (must be executed before MOVWF as this instruction also starts by 0)
+	switch (Instruction & 0x3FFF)
+	{
+		// NOP
+		case 0x0000:
+			// Point on next instruction
+			Core_Program_Counter++;
+			LOG(LOG_LEVEL_DEBUG, "Found instruction : NOP.\n");
+			goto Exit;
+			
+		// RETURN
+		case 0x0008:
+			// Pop the return address
+			Core_Program_Counter = CoreStackPop();
+			LOG(LOG_LEVEL_DEBUG, "Found instruction : RETURN.\n");
+			goto Exit;
+			
+		// RETFIE
+		case 0x0009:
+			// Set the INTCON Global Interrupt Enable flag
+			Temp_Byte = RegisterFileBankedRead(REGISTER_FILE_REGISTER_ADDRESS_INTCON); // Get the current INTCON value
+			Temp_Byte |= REGISTER_FILE_REGISTER_BIT_INTCON_GIE; // Set GIE bit
+			RegisterFileBankedWrite(REGISTER_FILE_REGISTER_ADDRESS_INTCON, Temp_Byte); // Set the new INTCON value
+			// Pop the return address
+			Core_Program_Counter = CoreStackPop();
+			LOG(LOG_LEVEL_DEBUG, "Found instruction : RETFIE.\n");
+			goto Exit;
+			
+		// SLEEP
+		case 0x0063:
+			// TODO if useful
+			// Point on next instruction
+			Core_Program_Counter++;
+			LOG(LOG_LEVEL_DEBUG, "Found instruction : SLEEP (NOT IMPLEMENTED).\n");
+			goto Exit;
+		
+		// CLRWDT
+		case 0x0064:
+			// TODO if useful
+			// Point on next instruction
+			Core_Program_Counter++;
+			LOG(LOG_LEVEL_DEBUG, "Found instruction : CLRWDT (NOT IMPLEMENTED).\n");
+			goto Exit;
+			
+		// CLRW
+		case 0x0100:
+			// Do the operation
+			Core_Register_W = 0;
+			// Handle STATUS flags
+			CoreUpdateStatusRegister(0, CORE_AFFECTED_FLAG_ZERO);
+			// Point on next instruction
+			Core_Program_Counter++;
+			LOG(LOG_LEVEL_DEBUG, "Found instruction : CLRW.\n");
+			goto Exit;
+	}
 	
 	// One 3-bit operand followed by one 7-bit operand instruction format
 	Byte_Operand_1 = (unsigned char) ((Instruction >> 7) & 0x0007); // Get the first operand
@@ -153,7 +187,7 @@ void CoreExecuteNextInstruction(void)
 			// Set the new register value
 			RegisterFileBankedWrite(Byte_Operand_2, Temp_Byte);
 			// Point on next instruction
-			Program_Counter++;
+			Core_Program_Counter++;
 			LOG(LOG_LEVEL_DEBUG, "Found instruction : BCF 0x%02X, %d.\n", Byte_Operand_2, Byte_Operand_1);
 			goto Exit;
 			
@@ -166,7 +200,7 @@ void CoreExecuteNextInstruction(void)
 			// Set the new register value
 			RegisterFileBankedWrite(Byte_Operand_2, Temp_Byte);
 			// Point on next instruction
-			Program_Counter++;
+			Core_Program_Counter++;
 			LOG(LOG_LEVEL_DEBUG, "Found instruction : BSF 0x%02X, %d.\n", Byte_Operand_2, Byte_Operand_1);
 			goto Exit;
 			
@@ -175,8 +209,8 @@ void CoreExecuteNextInstruction(void)
 			// Get the register to test value
 			Temp_Byte = RegisterFileBankedRead(Byte_Operand_2);
 			// Skip next instruction if the requested bit is clear
-			if (!(Temp_Byte & (1 << Byte_Operand_1))) Program_Counter += 2;
-			else Program_Counter++; // Point on next instruction
+			if (!(Temp_Byte & (1 << Byte_Operand_1))) Core_Program_Counter += 2;
+			else Core_Program_Counter++; // Point on next instruction
 			LOG(LOG_LEVEL_DEBUG, "Found instruction : BTFSC 0x%02X, %d.\n", Byte_Operand_2, Byte_Operand_1);
 			goto Exit;
 			
@@ -185,8 +219,8 @@ void CoreExecuteNextInstruction(void)
 			// Get the register to test value
 			Temp_Byte = RegisterFileBankedRead(Byte_Operand_2);
 			// Skip next instruction if the requested bit is set
-			if (Temp_Byte & (1 << Byte_Operand_1)) Program_Counter += 2;
-			else Program_Counter++; // Point on next instruction
+			if (Temp_Byte & (1 << Byte_Operand_1)) Core_Program_Counter += 2;
+			else Core_Program_Counter++; // Point on next instruction
 			LOG(LOG_LEVEL_DEBUG, "Found instruction : BTFSS 0x%02X, %d.\n", Byte_Operand_2, Byte_Operand_1);
 			goto Exit;
 	}
@@ -201,7 +235,7 @@ void CoreExecuteNextInstruction(void)
 			// Do the operation
 			RegisterFileBankedWrite(Byte_Operand_2, Core_Register_W);
 			// Point on next instruction
-			Program_Counter++;
+			Core_Program_Counter++;
 			LOG(LOG_LEVEL_DEBUG, "Found instruction : MOVWF 0x%02X.\n", Byte_Operand_2);
 			goto Exit;
 			
@@ -212,7 +246,7 @@ void CoreExecuteNextInstruction(void)
 			// Handle STATUS flags
 			CoreUpdateStatusRegister(0, CORE_AFFECTED_FLAG_ZERO);
 			// Point on next instruction
-			Program_Counter++;
+			Core_Program_Counter++;
 			LOG(LOG_LEVEL_DEBUG, "Found instruction : CLRF 0x%02X.\n", Byte_Operand_2);
 			goto Exit;
 			
@@ -228,7 +262,7 @@ void CoreExecuteNextInstruction(void)
 			if (Byte_Operand_1 == 0) Core_Register_W = (unsigned char) Temp_Word;
 			else RegisterFileBankedWrite(Byte_Operand_2, (unsigned char) Temp_Word);
 			// Point on next instruction
-			Program_Counter++;
+			Core_Program_Counter++;
 			LOG(LOG_LEVEL_DEBUG, "Found instruction : SUBWF 0x%02X, %c.\n", Byte_Operand_2, Byte_Operand_1 == 0 ? 'W' : 'F');
 			goto Exit;
 			
@@ -244,7 +278,7 @@ void CoreExecuteNextInstruction(void)
 			if (Byte_Operand_1 == 0) Core_Register_W = Temp_Byte;
 			else RegisterFileBankedWrite(Byte_Operand_2, Temp_Byte);
 			// Point on next instruction
-			Program_Counter++;
+			Core_Program_Counter++;
 			LOG(LOG_LEVEL_DEBUG, "Found instruction : DECF 0x%02X, %c.\n", Byte_Operand_2, Byte_Operand_1 == 0 ? 'W' : 'F');
 			goto Exit;
 			
@@ -260,7 +294,7 @@ void CoreExecuteNextInstruction(void)
 			if (Byte_Operand_1 == 0) Core_Register_W = Temp_Byte;
 			else RegisterFileBankedWrite(Byte_Operand_2, Temp_Byte);
 			// Point on next instruction
-			Program_Counter++;
+			Core_Program_Counter++;
 			LOG(LOG_LEVEL_DEBUG, "Found instruction : IORWF 0x%02X, %c.\n", Byte_Operand_2, Byte_Operand_1 == 0 ? 'W' : 'F');
 			goto Exit;
 			
@@ -276,7 +310,7 @@ void CoreExecuteNextInstruction(void)
 			if (Byte_Operand_1 == 0) Core_Register_W = Temp_Byte;
 			else RegisterFileBankedWrite(Byte_Operand_2, Temp_Byte);
 			// Point on next instruction
-			Program_Counter++;
+			Core_Program_Counter++;
 			LOG(LOG_LEVEL_DEBUG, "Found instruction : ANDWF 0x%02X, %c.\n", Byte_Operand_2, Byte_Operand_1 == 0 ? 'W' : 'F');
 			goto Exit;
 			
@@ -292,7 +326,7 @@ void CoreExecuteNextInstruction(void)
 			if (Byte_Operand_1 == 0) Core_Register_W = Temp_Byte;
 			else RegisterFileBankedWrite(Byte_Operand_2, Temp_Byte);
 			// Point on next instruction
-			Program_Counter++;
+			Core_Program_Counter++;
 			LOG(LOG_LEVEL_DEBUG, "Found instruction : XORWF 0x%02X, %c.\n", Byte_Operand_2, Byte_Operand_1 == 0 ? 'W' : 'F');
 			goto Exit;
 			
@@ -308,7 +342,7 @@ void CoreExecuteNextInstruction(void)
 			if (Byte_Operand_1 == 0) Core_Register_W = (unsigned char) Temp_Word;
 			else RegisterFileBankedWrite(Byte_Operand_2, (unsigned char) Temp_Word);
 			// Point on next instruction
-			Program_Counter++;
+			Core_Program_Counter++;
 			LOG(LOG_LEVEL_DEBUG, "Found instruction : ADDWF 0x%02X, %c.\n", Byte_Operand_2, Byte_Operand_1 == 0 ? 'W' : 'F');
 			goto Exit;
 			
@@ -321,7 +355,7 @@ void CoreExecuteNextInstruction(void)
 			// Update the right destination register
 			if (Byte_Operand_1 == 0) Core_Register_W = Temp_Byte;
 			// Point on next instruction
-			Program_Counter++;
+			Core_Program_Counter++;
 			LOG(LOG_LEVEL_DEBUG, "Found instruction : MOVF 0x%02X, %c.\n", Byte_Operand_2, Byte_Operand_1 == 0 ? 'W' : 'F');
 			goto Exit;
 			
@@ -337,7 +371,7 @@ void CoreExecuteNextInstruction(void)
 			if (Byte_Operand_1 == 0) Core_Register_W = Temp_Byte;
 			else RegisterFileBankedWrite(Byte_Operand_2, Temp_Byte);
 			// Point on next instruction
-			Program_Counter++;
+			Core_Program_Counter++;
 			LOG(LOG_LEVEL_DEBUG, "Found instruction : COMF 0x%02X, %c.\n", Byte_Operand_2, Byte_Operand_1 == 0 ? 'W' : 'F');
 			goto Exit;
 			
@@ -353,7 +387,7 @@ void CoreExecuteNextInstruction(void)
 			if (Byte_Operand_1 == 0) Core_Register_W = Temp_Byte;
 			else RegisterFileBankedWrite(Byte_Operand_2, Temp_Byte);
 			// Point on next instruction
-			Program_Counter++;
+			Core_Program_Counter++;
 			LOG(LOG_LEVEL_DEBUG, "Found instruction : INCF 0x%02X, %c.\n", Byte_Operand_2, Byte_Operand_1 == 0 ? 'W' : 'F');
 			goto Exit;
 			
@@ -367,8 +401,8 @@ void CoreExecuteNextInstruction(void)
 			if (Byte_Operand_1 == 0) Core_Register_W = Temp_Byte;
 			else RegisterFileBankedWrite(Byte_Operand_2, Temp_Byte);
 			// Skip next instruction if the result is zero
-			if (Temp_Byte == 0) Program_Counter += 2;
-			else Program_Counter++; // Point on next instruction
+			if (Temp_Byte == 0) Core_Program_Counter += 2;
+			else Core_Program_Counter++; // Point on next instruction
 			LOG(LOG_LEVEL_DEBUG, "Found instruction : DECFSZ 0x%02X, %c.\n", Byte_Operand_2, Byte_Operand_1 == 0 ? 'W' : 'F');
 			goto Exit;
 			
@@ -391,7 +425,7 @@ void CoreExecuteNextInstruction(void)
 			if (Byte_Operand_1 == 0) Core_Register_W = Temp_Byte;
 			else RegisterFileBankedWrite(Byte_Operand_2, Temp_Byte);
 			// Point on next instruction
-			Program_Counter++;
+			Core_Program_Counter++;
 			LOG(LOG_LEVEL_DEBUG, "Found instruction : RRF 0x%02X, %c.\n", Byte_Operand_2, Byte_Operand_1 == 0 ? 'W' : 'F');
 			goto Exit;
 			
@@ -414,7 +448,7 @@ void CoreExecuteNextInstruction(void)
 			if (Byte_Operand_1 == 0) Core_Register_W = Temp_Byte;
 			else RegisterFileBankedWrite(Byte_Operand_2, Temp_Byte);
 			// Point on next instruction
-			Program_Counter++;
+			Core_Program_Counter++;
 			LOG(LOG_LEVEL_DEBUG, "Found instruction : RLF 0x%02X, %c.\n", Byte_Operand_2, Byte_Operand_1 == 0 ? 'W' : 'F');
 			goto Exit;
 			
@@ -429,7 +463,7 @@ void CoreExecuteNextInstruction(void)
 			if (Byte_Operand_1 == 0) Core_Register_W = Temp_Byte;
 			else RegisterFileBankedWrite(Byte_Operand_2, Temp_Byte);
 			// Point on next instruction
-			Program_Counter++;
+			Core_Program_Counter++;
 			LOG(LOG_LEVEL_DEBUG, "Found instruction : SWAPF 0x%02X, %c.\n", Byte_Operand_2, Byte_Operand_1 == 0 ? 'W' : 'F');
 			goto Exit;
 			
@@ -443,31 +477,30 @@ void CoreExecuteNextInstruction(void)
 			if (Byte_Operand_1 == 0) Core_Register_W = Temp_Byte;
 			else RegisterFileBankedWrite(Byte_Operand_2, Temp_Byte);
 			// Skip next instruction if the result is zero
-			if (Temp_Byte == 0) Program_Counter += 2;
-			else Program_Counter++; // Point on next instruction
+			if (Temp_Byte == 0) Core_Program_Counter += 2;
+			else Core_Program_Counter++; // Point on next instruction
 			LOG(LOG_LEVEL_DEBUG, "Found instruction : INCFSZ 0x%02X, %c.\n", Byte_Operand_2, Byte_Operand_1 == 0 ? 'W' : 'F');
 			goto Exit;
 	}
 	
 	// One 11-bit operand instruction format
 	Word_Operand = Instruction & 0x07FF; // Get the operand
+	Temp_Byte = RegisterFileBankedRead(REGISTER_FILE_REGISTER_ADDRESS_PCLATH) & 0x18; // Get upper 2 bits
 	switch ((Instruction >> 11) & 0x0007)
 	{
 		// CALL
 		case 0x04:
 			// Push the Program Counter return value (PC + 1)
-			CoreStackPush(Program_Counter + 1);
+			CoreStackPush(Core_Program_Counter + 1);
 			// Do the operation
-			Program_Counter &= 0x7FF; // Clear the 11 bits that will be replaced by the instruction content
-			Program_Counter |= Word_Operand;
+			Core_Program_Counter = (Temp_Byte << 8) | Word_Operand;
 			LOG(LOG_LEVEL_DEBUG, "Found instruction : CALL 0x%04X.\n", Word_Operand);
 			goto Exit;
 		
 		// GOTO
 		case 0x05:
 			// Do the operation
-			Program_Counter &= 0x7FF; // Clear the 11 bits that will be replaced by the instruction content
-			Program_Counter |= Word_Operand;
+			Core_Program_Counter = (Temp_Byte << 8) | Word_Operand;
 			LOG(LOG_LEVEL_DEBUG, "Found instruction : GOTO 0x%04X.\n", Word_Operand);
 			goto Exit;
 	}
@@ -481,7 +514,7 @@ void CoreExecuteNextInstruction(void)
 			// Do the operation
 			Core_Register_W = Byte_Operand_1;
 			// Point on next instruction
-			Program_Counter++;
+			Core_Program_Counter++;
 			LOG(LOG_LEVEL_DEBUG, "Found instruction : MOVLW 0x%02X.\n", Byte_Operand_1);
 			goto Exit;
 			
@@ -490,7 +523,7 @@ void CoreExecuteNextInstruction(void)
 			// Put the return value in W
 			Core_Register_W = Byte_Operand_1;
 			// Pop the return address
-			Program_Counter = CoreStackPop();
+			Core_Program_Counter = CoreStackPop();
 			LOG(LOG_LEVEL_DEBUG, "Found instruction : RETLW 0x%02X.\n", Byte_Operand_1);
 			goto Exit;
 			
@@ -501,7 +534,7 @@ void CoreExecuteNextInstruction(void)
 			// Handle STATUS flags
 			CoreUpdateStatusRegister(Core_Register_W, CORE_AFFECTED_FLAG_ZERO);
 			// Point on next instruction
-			Program_Counter++;
+			Core_Program_Counter++;
 			LOG(LOG_LEVEL_DEBUG, "Found instruction : IORLW 0x%02X.\n", Byte_Operand_1);
 			goto Exit;
 			
@@ -512,7 +545,7 @@ void CoreExecuteNextInstruction(void)
 			// Handle STATUS flags
 			CoreUpdateStatusRegister(Core_Register_W, CORE_AFFECTED_FLAG_ZERO);
 			// Point on next instruction
-			Program_Counter++;
+			Core_Program_Counter++;
 			LOG(LOG_LEVEL_DEBUG, "Found instruction : ANDLW 0x%02X.\n", Byte_Operand_1);
 			goto Exit;
 			
@@ -523,7 +556,7 @@ void CoreExecuteNextInstruction(void)
 			// Handle STATUS flags
 			CoreUpdateStatusRegister(Core_Register_W, CORE_AFFECTED_FLAG_ZERO);
 			// Point on next instruction
-			Program_Counter++;
+			Core_Program_Counter++;
 			LOG(LOG_LEVEL_DEBUG, "Found instruction : XORLW 0x%02X.\n", Byte_Operand_1);
 			goto Exit;
 			
@@ -535,7 +568,7 @@ void CoreExecuteNextInstruction(void)
 			// Handle STATUS flags
 			CoreUpdateStatusRegister(Temp_Word, CORE_AFFECTED_FLAG_CARRY | CORE_AFFECTED_FLAG_DIGIT_CARRY | CORE_AFFECTED_FLAG_ZERO);
 			// Point on next instruction
-			Program_Counter++;
+			Core_Program_Counter++;
 			LOG(LOG_LEVEL_DEBUG, "Found instruction : SUBLW 0x%02X.\n", Byte_Operand_1);
 			goto Exit;
 			
@@ -547,73 +580,15 @@ void CoreExecuteNextInstruction(void)
 			// Handle STATUS flags
 			CoreUpdateStatusRegister(Temp_Word, CORE_AFFECTED_FLAG_CARRY | CORE_AFFECTED_FLAG_DIGIT_CARRY | CORE_AFFECTED_FLAG_ZERO);
 			// Point on next instruction
-			Program_Counter++;
+			Core_Program_Counter++;
 			LOG(LOG_LEVEL_DEBUG, "Found instruction : ADDLW 0x%02X.\n", Byte_Operand_1);
 			goto Exit;
 	}
 	
-	// No operand instruction format
-	switch (Instruction & 0x3FFF)
-	{
-		// NOP
-		case 0x0000:
-			// Point on next instruction
-			Program_Counter++;
-			LOG(LOG_LEVEL_DEBUG, "Found instruction : NOP.\n");
-			goto Exit;
-			
-		// RETURN
-		case 0x0008:
-			// Pop the return address
-			Program_Counter = CoreStackPop();
-			LOG(LOG_LEVEL_DEBUG, "Found instruction : RETURN.\n");
-			goto Exit;
-			
-		// RETFIE
-		case 0x0009:
-			// Set the INTCON Global Interrupt Enable flag
-			Temp_Byte = RegisterFileBankedRead(REGISTER_FILE_REGISTER_ADDRESS_INTCON); // Get the current INTCON value
-			Temp_Byte |= REGISTER_FILE_REGISTER_BIT_INTCON_GIE; // Set GIE bit
-			RegisterFileBankedWrite(REGISTER_FILE_REGISTER_ADDRESS_INTCON, Temp_Byte); // Set the new INTCON value
-			// Pop the return address
-			Program_Counter = CoreStackPop();
-			LOG(LOG_LEVEL_DEBUG, "Found instruction : RETFIE.\n");
-			goto Exit;
-			
-		// SLEEP
-		case 0x0063:
-			// TODO if useful
-			// Point on next instruction
-			Program_Counter++;
-			LOG(LOG_LEVEL_DEBUG, "Found instruction : SLEEP (NOT IMPLEMENTED).\n");
-			goto Exit;
-		
-		// CLRWDT
-		case 0x0064:
-			// TODO if useful
-			// Point on next instruction
-			Program_Counter++;
-			LOG(LOG_LEVEL_DEBUG, "Found instruction : CLRWDT (NOT IMPLEMENTED).\n");
-			goto Exit;
-			
-		// CLRW
-		case 0x0100:
-			// Do the operation
-			Core_Register_W = 0;
-			// Handle STATUS flags
-			CoreUpdateStatusRegister(0, CORE_AFFECTED_FLAG_ZERO);
-			// Point on next instruction
-			Program_Counter++;
-			LOG(LOG_LEVEL_DEBUG, "Found instruction : CLRW.\n");
-			goto Exit;
-		
-		// Unknown instructions are executed as NOP
-		default:
-			// Point on next instruction
-			Program_Counter++;
-			LOG(LOG_LEVEL_WARNING, "WARNING : unknown instruction found, executing as NOP.\n");
-			goto Exit;
-	}
+	// Unknown instructions are executed as NOP
+	// Point on next instruction
+	Core_Program_Counter++;
+	LOG(LOG_LEVEL_WARNING, "WARNING : unknown instruction found, executing as NOP.\n");
 	
 Exit:
 	// Check for interrupt
@@ -625,13 +600,13 @@ Exit:
 		RegisterFileBankedWrite(REGISTER_FILE_REGISTER_ADDRESS_INTCON, Temp_Byte);
 		
 		// Push the Program Counter return value (PC + 1)
-		CoreStackPush(Program_Counter + 1);
+		CoreStackPush(Core_Program_Counter + 1);
 		// Branch to the interrupt handler entry point
-		Program_Counter = 0x0004;
+		Core_Program_Counter = 0x0004;
 		LOG(LOG_LEVEL_DEBUG, "Interrupt fired. Branching to interrupt handler entry point.\n");
 	}
 
-	// Save the new Program Counter value
-	CoreWriteBack(Program_Counter);
-	LOG(LOG_LEVEL_DEBUG, "Finished instruction execution, new Program Counter value is : 0x%04X.\n", Program_Counter);
+	// Save the new Program Counter value to PCL
+	RegisterFileBankedWrite(REGISTER_FILE_REGISTER_ADDRESS_PCL, (unsigned char) Core_Program_Counter);
+	LOG(LOG_LEVEL_DEBUG, "Finished instruction execution, new Program Counter value is : 0x%04X.\n", Core_Program_Counter);
 }
