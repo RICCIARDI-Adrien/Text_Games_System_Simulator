@@ -5,6 +5,7 @@
 #include <Core.h>
 #include <errno.h>
 #include <Log.h>
+#include <Peripheral_ADC.h>
 #include <Peripheral_Timer.h>
 #include <Peripheral_UART.h>
 #include <Program_Memory.h>
@@ -100,6 +101,7 @@ int main(int argc, char *argv[])
 	// Initialize subsystems
 	LogInitialize(String_Log_File, Log_Level);
 	RegisterFileInitialize();
+	PeripheralADCInitialize();
 	
 	// Load the program to execute
 	if (ProgramMemoryLoadHexFile(String_Program_Hex_File) != 0)

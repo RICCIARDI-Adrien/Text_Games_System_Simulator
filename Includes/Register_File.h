@@ -30,6 +30,9 @@
 #define REGISTER_FILE_REGISTER_ADDRESS_TXSTA 0x18
 #define REGISTER_FILE_REGISTER_ADDRESS_TXREG 0x19
 #define REGISTER_FILE_REGISTER_ADDRESS_RCREG 0x1A
+#define REGISTER_FILE_REGISTER_ADDRESS_ADRESH 0x1E
+#define REGISTER_FILE_REGISTER_ADDRESS_ADCON0 0x1F
+#define REGISTER_FILE_REGISTER_ADDRESS_ADRESL 0x1F
 
 // All register banks
 // TODO define missing ones when needed
@@ -45,6 +48,9 @@
 #define REGISTER_FILE_REGISTER_BANK_TXSTA 1
 #define REGISTER_FILE_REGISTER_BANK_TXREG 0
 #define REGISTER_FILE_REGISTER_BANK_RCREG 0
+#define REGISTER_FILE_REGISTER_BANK_ADRESH 0
+#define REGISTER_FILE_REGISTER_BANK_ADCON0 0
+#define REGISTER_FILE_REGISTER_BANK_ADRESL 1
 
 /** OPTION_REG register Prescaler Assignment bit. */
 #define REGISTER_FILE_REGISTER_BIT_OPTION_REG_PSA (1 << 3)
@@ -90,6 +96,11 @@
 
 /** TXSTA register Transmit Enable bit. */
 #define REGISTER_FILE_REGISTER_BIT_TXSTA_TXEN (1 << 5)
+
+/** ADCON0 register A/D Conversion Status bit. */
+#define REGISTER_FILE_REGISTER_BIT_ADCON0_GO (1 << 2)
+/** ADCON0 register A/D On bit. */
+#define REGISTER_FILE_REGISTER_BIT_ADCON0_ADON (1 << 0)
 
 //-------------------------------------------------------------------------------------------------
 // Types

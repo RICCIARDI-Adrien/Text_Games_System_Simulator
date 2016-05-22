@@ -3,6 +3,7 @@
  * @author Adrien RICCIARDI
  */
 #include <Log.h>
+#include <Peripheral_ADC.h>
 #include <Peripheral_UART.h>
 #include <pthread.h>
 #include <Register_File.h>
@@ -226,6 +227,11 @@ void RegisterFileInitialize(void)
 	Register_File[3][REGISTER_FILE_REGISTER_ADDRESS_OPTION_REG].Content.Pointer_Data = &Register_File[1][REGISTER_FILE_REGISTER_ADDRESS_OPTION_REG].Content.Data;
 	Register_File[3][REGISTER_FILE_REGISTER_ADDRESS_OPTION_REG].ReadCallback = RegisterFileRemappedRAMRead;
 	Register_File[3][REGISTER_FILE_REGISTER_ADDRESS_OPTION_REG].WriteCallback = RegisterFileRemappedRAMWrite;
+	
+	//===============================================
+	// Configure ADC registers
+	//===============================================
+	Register_File[REGISTER_FILE_REGISTER_BANK_ADCON0][REGISTER_FILE_REGISTER_ADDRESS_ADCON0].WriteCallback = PeripheralADCWriteADCON0;
 	
 	// TODO fill needed peripheral special registers
 }

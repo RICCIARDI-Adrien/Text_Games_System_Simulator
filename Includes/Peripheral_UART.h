@@ -10,7 +10,7 @@
 //-------------------------------------------------------------------------------------------------
 // Functions
 //-------------------------------------------------------------------------------------------------
-/** The callback that must be called when the RCREG is read.
+/** The callback that must be called when the RCREG register is read.
  * @param Pointer_Content The register content.
  * @return The last UART received byte.
  */
