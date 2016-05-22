@@ -214,6 +214,19 @@ void RegisterFileInitialize(void)
 	Register_File[REGISTER_FILE_REGISTER_BANK_TXREG][REGISTER_FILE_REGISTER_ADDRESS_TXREG].WriteCallback = PeripheralUARTWriteTXREG;
 	Register_File[REGISTER_FILE_REGISTER_BANK_RCREG][REGISTER_FILE_REGISTER_ADDRESS_RCREG].ReadCallback = PeripheralUARTReadRCREG;
 	
+	//===============================================
+	// Configure Timer 0 registers
+	//===============================================
+	// Remap TMR0 from bank 2 to bank 0
+	Register_File[2][REGISTER_FILE_REGISTER_ADDRESS_TMR0].Content.Pointer_Data = &Register_File[0][REGISTER_FILE_REGISTER_ADDRESS_TMR0].Content.Data;
+	Register_File[2][REGISTER_FILE_REGISTER_ADDRESS_TMR0].ReadCallback = RegisterFileRemappedRAMRead;
+	Register_File[2][REGISTER_FILE_REGISTER_ADDRESS_TMR0].WriteCallback = RegisterFileRemappedRAMWrite;
+	
+	// Remap OPTION_REG from bank 3 to bank 1
+	Register_File[3][REGISTER_FILE_REGISTER_ADDRESS_OPTION_REG].Content.Pointer_Data = &Register_File[1][REGISTER_FILE_REGISTER_ADDRESS_OPTION_REG].Content.Data;
+	Register_File[3][REGISTER_FILE_REGISTER_ADDRESS_OPTION_REG].ReadCallback = RegisterFileRemappedRAMRead;
+	Register_File[3][REGISTER_FILE_REGISTER_ADDRESS_OPTION_REG].WriteCallback = RegisterFileRemappedRAMWrite;
+	
 	// TODO fill needed peripheral special registers
 }
 

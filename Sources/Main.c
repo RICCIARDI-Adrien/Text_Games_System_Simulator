@@ -5,6 +5,7 @@
 #include <Core.h>
 #include <errno.h>
 #include <Log.h>
+#include <Peripheral_Timer.h>
 #include <Peripheral_UART.h>
 #include <Program_Memory.h>
 #include <pthread.h>
@@ -41,6 +42,9 @@ static inline void MainInitializeConsole(void)
 static inline void MainUninitializeConsole(void)
 {
 	system("stty cooked echo");
+	
+	// Show cursor
+	printf("\x1B[?25h");
 }
 
 /** Execute the PIC program.
@@ -50,7 +54,13 @@ static void *MainThreadExecuteProgram(void __attribute__((unused)) *Pointer_Para
 {
 	LOG(LOG_LEVEL_DEBUG, "Thread started.\n");
 
-	while (!Main_Is_Simulator_Exiting) CoreExecuteNextInstruction();
+	while (!Main_Is_Simulator_Exiting)
+	{
+		CoreExecuteNextInstruction();
+		
+		// Clock the timers
+		PeripheralTimerIncrement();
+	}
 
 	LOG(LOG_LEVEL_DEBUG, "Thread exited.\n");
 	pthread_exit(0);

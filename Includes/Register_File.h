@@ -16,6 +16,8 @@
 // All register addresses (addresses are relative to the beginning of the register bank)
 // TODO define missing ones when needed
 #define REGISTER_FILE_REGISTER_ADDRESS_INDF 0x00 // Replicated in all other banks, special behavior
+#define REGISTER_FILE_REGISTER_ADDRESS_TMR0 0x01 // Bank 0, replicated in bank 2
+#define REGISTER_FILE_REGISTER_ADDRESS_OPTION_REG 0x01 // Bank 1, replicated in bank 3
 #define REGISTER_FILE_REGISTER_ADDRESS_PCL 0x02 // Replicated in all other banks
 #define REGISTER_FILE_REGISTER_ADDRESS_STATUS 0x03 // Replicated in all other banks
 #define REGISTER_FILE_REGISTER_ADDRESS_FSR 0x04 // Replicated in all other banks
@@ -29,6 +31,8 @@
 
 // All register banks
 // TODO define missing ones when needed
+#define REGISTER_FILE_REGISTER_BANK_TMR0 0 // The real data byte is stored in bank 0, the replicated register points to this bank
+#define REGISTER_FILE_REGISTER_BANK_OPTION_REG 1 // The real data byte is stored in bank 0, the replicated register points to this bank
 #define REGISTER_FILE_REGISTER_BANK_STATUS 0 // The real data byte is stored in bank 0, the replicated registers all point to this bank
 #define REGISTER_FILE_REGISTER_BANK_FSR 0 // The real data byte is stored in bank 0, the replicated registers all point to this bank
 #define REGISTER_FILE_REGISTER_BANK_INTCON 0 // The real data byte is stored in bank 0, the replicated registers all point to this bank
@@ -37,6 +41,9 @@
 #define REGISTER_FILE_REGISTER_BANK_TXSTA 1
 #define REGISTER_FILE_REGISTER_BANK_TXREG 0
 #define REGISTER_FILE_REGISTER_BANK_RCREG 0
+
+/** OPTION_REG register Prescaler Assignment bit. */
+#define REGISTER_FILE_REGISTER_BIT_OPTION_REG_PSA (1 << 3)
 
 /** STATUS register Register Bank Select bit. */
 #define REGISTER_FILE_REGISTER_BIT_STATUS_IRP (1 << 7)
