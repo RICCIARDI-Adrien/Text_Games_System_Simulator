@@ -50,9 +50,18 @@ void PeripheralTimerIncrement(void)
 		}
 	}
 		
+	// Increment timer 2 only if it is enabled
+	Temp_Byte = RegisterFileDirectRead(REGISTER_FILE_REGISTER_BANK_T2CON, REGISTER_FILE_REGISTER_ADDRESS_T2CON);
+	if (Temp_Byte & REGISTER_FILE_REGISTER_BIT_T2CON_TMR2ON)
+	{
+		// TODO handle prescaler
 		
-	
-	// Increment timer only if it is enabled
-	//Timer_Control_Register = 
-	
+		Temp_Byte = RegisterFileDirectRead(REGISTER_FILE_REGISTER_BANK_TMR2, REGISTER_FILE_REGISTER_ADDRESS_TMR2);
+		Temp_Byte++;
+		RegisterFileDirectWrite(REGISTER_FILE_REGISTER_BANK_TMR2, REGISTER_FILE_REGISTER_ADDRESS_TMR2, Temp_Byte);
+		
+		// TODO handle postscaler
+		
+		// TODO handle interrupt flag
+	}
 }
