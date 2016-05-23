@@ -4,6 +4,7 @@
  */
 #include <Log.h>
 #include <Peripheral_ADC.h>
+#include <Peripheral_I2C_EEPROM.h>
 #include <Peripheral_UART.h>
 #include <pthread.h>
 #include <Register_File.h>
@@ -232,6 +233,12 @@ void RegisterFileInitialize(void)
 	// Configure ADC registers
 	//===============================================
 	Register_File[REGISTER_FILE_REGISTER_BANK_ADCON0][REGISTER_FILE_REGISTER_ADDRESS_ADCON0].WriteCallback = PeripheralADCWriteADCON0;
+	
+	//===============================================
+	// Configure external I2C EEPROM registers
+	//===============================================
+	Register_File[REGISTER_FILE_REGISTER_BANK_SSPCON2][REGISTER_FILE_REGISTER_ADDRESS_SSPCON2].WriteCallback = PeripheralI2CEEPROMWriteSSPCON2;
+	Register_File[REGISTER_FILE_REGISTER_BANK_SSPBUF][REGISTER_FILE_REGISTER_ADDRESS_SSPBUF].WriteCallback = PeripheralI2CEEPROMWriteSSPBUF;
 	
 	// TODO fill needed peripheral special registers
 }

@@ -6,6 +6,7 @@
 #include <errno.h>
 #include <Log.h>
 #include <Peripheral_ADC.h>
+#include <Peripheral_I2C_EEPROM.h>
 #include <Peripheral_Timer.h>
 #include <Peripheral_UART.h>
 #include <Program_Memory.h>
@@ -72,19 +73,21 @@ static void *MainThreadExecuteProgram(void __attribute__((unused)) *Pointer_Para
 //-------------------------------------------------------------------------------------------------
 int main(int argc, char *argv[])
 {
-	char *String_Log_File, *String_Program_Hex_File;
+	char *String_Log_File, *String_Program_Hex_File, *String_EEPROM_File;
 	TLogLevel Log_Level;
 	pthread_t Thread_ID;
 	int Character_Code;
 	
 	// Check parameters
-	if (argc != 4)
+	if (argc != 5)
 	{
-		printf("Usage : %s Log_File Log_Level Program_Hex_File\n"
+		printf("Usage : %s Log_File Log_Level Program_Hex_File EEPROM_File\n"
 			"  Log_File : the file that will contain all logs.\n"
 			"  Log_Level : how much log to write to the log file (error = 0, warning = 1, debug = 2).\n"
 			"  Program_Hex_File : an Intel Hex file containing the program code.\n"
-			"Use Ctrl+C to exit program.\n", argv[0]);
+			"  EEPROM_File : a 4096-byte file containing the EEPROM data.\n"
+			"Use Ctrl+C to exit program.\n"
+			"Use Ctrl+D to write a dump of the register file to the log file.\n", argv[0]);
 		return EXIT_FAILURE;
 	}
 	
@@ -97,6 +100,7 @@ int main(int argc, char *argv[])
 		return EXIT_FAILURE;
 	}
 	String_Program_Hex_File = argv[3];
+	String_EEPROM_File = argv[4];
 	
 	// Initialize subsystems
 	LogInitialize(String_Log_File, Log_Level);
@@ -107,6 +111,13 @@ int main(int argc, char *argv[])
 	if (ProgramMemoryLoadHexFile(String_Program_Hex_File) != 0)
 	{
 		printf("Error : failed to load the hex file. See logs for more information.\n");
+		return EXIT_FAILURE;
+	}
+	
+	// Load the EEPROM content
+	if (PeripheralI2CEEPROMInitialize(String_EEPROM_File) != 0)
+	{
+		printf("Error : failed to load the EEPROM file. See logs for more information.\n");
 		return EXIT_FAILURE;
 	}
 
