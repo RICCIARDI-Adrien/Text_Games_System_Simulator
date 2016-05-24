@@ -66,11 +66,40 @@ int PeripheralI2CEEPROMInitialize(char *String_EEPROM_File)
 	Result = fread(Peripheral_I2C_EEPROM_Memory, 1, PERIPHERAL_I2C_EEPROM_MEMORY_SIZE, Pointer_File);
 	if (ferror(Pointer_File))
 	{
-		LOG(LOG_LEVEL_ERROR, "Error : failed to read the EEPROM file (%s).\n", strerror(errno));
+		LOG(LOG_LEVEL_ERROR, "Error : failed to read from the EEPROM file (%s).\n", strerror(errno));
 		goto Exit;
 	}
 	
 	LOG(LOG_LEVEL_DEBUG, "EEPROM file successfully read (%d bytes).\n", Result);
+	Return_Value = 0;
+	
+Exit:
+	if (Pointer_File != NULL) fclose(Pointer_File); // Close the file if needed
+	return Return_Value;
+}
+
+int PeripheralI2CEEPROMStoreMemoryToFile(char *String_EEPROM_File)
+{
+	FILE *Pointer_File;
+	int Return_Value = 1, Result;
+	
+	// Try to open the file
+	Pointer_File = fopen(String_EEPROM_File, "wb"); // Must specify 'binary' mode on Windows
+	if (Pointer_File == NULL)
+	{
+		LOG(LOG_LEVEL_ERROR, "Error : could not open the EEPROM file '%s' (%s).\n", String_EEPROM_File, strerror(errno));
+		goto Exit;
+	}
+	
+	// Write the memory content to the file
+	Result = fwrite(Peripheral_I2C_EEPROM_Memory, 1, PERIPHERAL_I2C_EEPROM_MEMORY_SIZE, Pointer_File);
+	if (ferror(Pointer_File))
+	{
+		LOG(LOG_LEVEL_ERROR, "Error : failed to write to the EEPROM file (%s).\n", strerror(errno));
+		goto Exit;
+	}
+	
+	LOG(LOG_LEVEL_DEBUG, "EEPROM file successfully written (%d bytes).\n", Result);
 	Return_Value = 0;
 	
 Exit:

@@ -124,7 +124,7 @@ int main(int argc, char *argv[])
 	// Create a thread that will execute the PIC program
 	if (pthread_create(&Thread_ID, NULL, MainThreadExecuteProgram, NULL) != 0)
 	{
-		printf("Error : failed to create a thread (%s).\n", strerror(errno));
+		printf("Error : failed to create the CPU thread (%s).\n", strerror(errno));
 		return EXIT_FAILURE;
 	}
 
@@ -145,7 +145,14 @@ int main(int argc, char *argv[])
 	Main_Is_Simulator_Exiting = 1;
 	if (pthread_join(Thread_ID, NULL) != 0)
 	{
-		printf("Error : failed to join the thread (%s).\n", strerror(errno));
+		printf("Error : failed to join the CPU thread (%s).\n", strerror(errno));
+		return EXIT_FAILURE;
+	}
+	
+	// Store the EEPROM content to the EEPROM file
+	if (PeripheralI2CEEPROMStoreMemoryToFile(String_EEPROM_File))
+	{
+		printf("Error : failed to save the EEPROM memory content to the EEPROM file. See logs for more information.\n");
 		return EXIT_FAILURE;
 	}
 
