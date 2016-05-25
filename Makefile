@@ -3,7 +3,7 @@ PATH_OBJECTS = Objects
 PATH_SOURCES = Sources
 
 CC = gcc
-CCFLAGS = -W -Wall -I$(PATH_INCLUDES) -pthread
+CCFLAGS = -W -Wall -I$(PATH_INCLUDES) -O2 -pthread -lrt
 
 BINARY = Simulator
 OBJECTS = $(PATH_OBJECTS)/Core.o $(PATH_OBJECTS)/Hex_Parser.o $(PATH_OBJECTS)/Log.o $(PATH_OBJECTS)/Main.o $(PATH_OBJECTS)/Peripheral_ADC.o $(PATH_OBJECTS)/Peripheral_I2C_EEPROM.o $(PATH_OBJECTS)/Peripheral_Timer.o $(PATH_OBJECTS)/Peripheral_UART.o $(PATH_OBJECTS)/Program_Memory.o $(PATH_OBJECTS)/Register_File.o

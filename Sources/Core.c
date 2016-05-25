@@ -6,6 +6,7 @@
 #include <Log.h>
 #include <Program_Memory.h>
 #include <Register_File.h>
+#include <time.h>
 
 //-------------------------------------------------------------------------------------------------
 // Private constants
@@ -16,6 +17,9 @@
 #define CORE_AFFECTED_FLAG_DIGIT_CARRY (1 << 1)
 /** The Zero flag was affected by the last operation. */
 #define CORE_AFFECTED_FLAG_ZERO (1 << 2)
+
+/** The needed time for the PIC core to execute an instruction (in nanoseconds). Two-cycle instructions are not taken into account. */
+#define CORE_INSTRUCTION_EXECUTION_TIME 1000 // Tcy = Fosc/4, on the Text Games System Fosc = 4MHz
 
 //-------------------------------------------------------------------------------------------------
 // Private variables
@@ -110,6 +114,12 @@ void CoreExecuteNextInstruction(void)
 {
 	unsigned char Byte_Operand_1, Byte_Operand_2, Temp_Byte, Current_Carry_Value, New_Carry_Value;
 	unsigned short Instruction, Temp_Word, Word_Operand;
+	struct timespec Time;
+	long Start_Time, Current_Time, Elapsed_Time;
+	
+	// Get the current clock value
+	clock_gettime(CLOCK_MONOTONIC, &Time);
+	Start_Time = Time.tv_nsec;
 	
 	// Fetch the next instruction
 	Instruction = ProgramMemoryRead(Core_Program_Counter);
@@ -615,4 +625,16 @@ Exit:
 	// Save the new Program Counter value to PCL
 	RegisterFileBankedWrite(REGISTER_FILE_REGISTER_ADDRESS_PCL, (unsigned char) Core_Program_Counter);
 	LOG(LOG_LEVEL_DEBUG, "Finished instruction execution, new Program Counter value is : 0x%04X.\n", Core_Program_Counter);
+	
+	// Wait a little if the host CPU is too fast to emulate the real PIC instruction cycle
+	do
+	{
+		// Get the current clock value
+		clock_gettime(CLOCK_MONOTONIC, &Time);
+		Current_Time = Time.tv_nsec;
+		
+		// Compute the gap between the two time values
+		if (Start_Time > Current_Time) Start_Time -= 1000000000L; // Handle the wrap-around by adjusting the start time to be negative, so it can be subtracted from the positive current time resulting in a positive value
+		Elapsed_Time = Current_Time - Start_Time;
+	} while (Elapsed_Time < CORE_INSTRUCTION_EXECUTION_TIME); // This looks like a dirty hand-made spinlock but it was the only way to get an accurate time, clock_nanosleep() was too slow for this usage
 }
