@@ -37,13 +37,13 @@ static volatile int Main_Is_Simulator_Exiting = 0;
 /** Do not display typed in text and disable all default console features. */
 static inline void MainInitializeConsole(void)
 {
-	system("stty raw -echo");
+	if (system("stty raw -echo") != 0) printf("WARNING : tty initialization failed.\n");
 }
 
 /** Restore the console default behavior. */
 static inline void MainUninitializeConsole(void)
 {
-	system("stty cooked echo");
+	if (system("stty cooked echo") != 0) printf("WARNING : tty uninitialization failed.\n");
 	
 	// Show cursor
 	printf("\x1B[?25h");
