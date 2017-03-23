@@ -116,14 +116,24 @@ void CoreExecuteNextInstruction(void)
 	unsigned short Instruction, Temp_Word, Word_Operand;
 	struct timespec Time;
 	long Start_Time, Current_Time, Elapsed_Time;
+	static int Is_Cycle_Lost = 0;
 	
 	// Get the current clock value
 	clock_gettime(CLOCK_MONOTONIC, &Time);
 	Start_Time = Time.tv_nsec;
 	
 	// Fetch the next instruction
-	Instruction = ProgramMemoryRead(Core_Program_Counter);
-	LOG(LOG_LEVEL_DEBUG, "Fetched next instruction at PC = 0x%04X, instruction : 0x%04X.\n", Core_Program_Counter, Instruction);
+	if (Is_Cycle_Lost) // An instruction cycle is wasted if a conditional test is true or if the program counter is changed by an instruction
+	{
+		Is_Cycle_Lost = 0;
+		LOG(LOG_LEVEL_DEBUG, "Executing a fake NOP instruction due to previous 2-cycle instruction.\n");
+		goto Exit; // Do not really execute the NOP instruction to avoid modifying the program counter register. Do not disable interrupts because they seem to be left enabled when a 2-cycle instruction is executed
+	}
+	else
+	{
+		Instruction = ProgramMemoryRead(Core_Program_Counter);
+		LOG(LOG_LEVEL_DEBUG, "Fetched next instruction at PC = 0x%04X, instruction : 0x%04X.\n", Core_Program_Counter, Instruction);
+	}
 	
 	// Decode and execute the instruction
 	
@@ -141,6 +151,7 @@ void CoreExecuteNextInstruction(void)
 		case 0x0008:
 			// Pop the return address
 			Core_Program_Counter = CoreStackPop();
+			Is_Cycle_Lost = 1; // This is a 2-cycle instruction
 			LOG(LOG_LEVEL_DEBUG, "Found instruction : RETURN.\n");
 			goto Exit;
 			
@@ -152,6 +163,7 @@ void CoreExecuteNextInstruction(void)
 			RegisterFileBankedWrite(REGISTER_FILE_REGISTER_ADDRESS_INTCON, Temp_Byte); // Set the new INTCON value
 			// Pop the return address
 			Core_Program_Counter = CoreStackPop();
+			Is_Cycle_Lost = 1; // This is a 2-cycle instruction
 			LOG(LOG_LEVEL_DEBUG, "Found instruction : RETFIE.\n");
 			goto Exit;
 			
@@ -219,7 +231,11 @@ void CoreExecuteNextInstruction(void)
 			// Get the register to test value
 			Temp_Byte = RegisterFileBankedRead(Byte_Operand_2);
 			// Skip next instruction if the requested bit is clear
-			if (!(Temp_Byte & (1 << Byte_Operand_1))) Core_Program_Counter += 2;
+			if (!(Temp_Byte & (1 << Byte_Operand_1)))
+			{
+				Core_Program_Counter += 2;
+				Is_Cycle_Lost = 1; // This is a 2-cycle instruction
+			}
 			else Core_Program_Counter++; // Point on next instruction
 			LOG(LOG_LEVEL_DEBUG, "Found instruction : BTFSC 0x%02X, %d.\n", Byte_Operand_2, Byte_Operand_1);
 			goto Exit;
@@ -229,7 +245,11 @@ void CoreExecuteNextInstruction(void)
 			// Get the register to test value
 			Temp_Byte = RegisterFileBankedRead(Byte_Operand_2);
 			// Skip next instruction if the requested bit is set
-			if (Temp_Byte & (1 << Byte_Operand_1)) Core_Program_Counter += 2;
+			if (Temp_Byte & (1 << Byte_Operand_1))
+			{
+				Core_Program_Counter += 2;
+				Is_Cycle_Lost = 1; // This is a 2-cycle instruction
+			}
 			else Core_Program_Counter++; // Point on next instruction
 			LOG(LOG_LEVEL_DEBUG, "Found instruction : BTFSS 0x%02X, %d.\n", Byte_Operand_2, Byte_Operand_1);
 			goto Exit;
@@ -414,7 +434,11 @@ void CoreExecuteNextInstruction(void)
 			if (Byte_Operand_1 == 0) Core_Register_W = Temp_Byte;
 			else RegisterFileBankedWrite(Byte_Operand_2, Temp_Byte);
 			// Skip next instruction if the result is zero
-			if (Temp_Byte == 0) Core_Program_Counter += 2;
+			if (Temp_Byte == 0)
+			{
+				Core_Program_Counter += 2;
+				Is_Cycle_Lost = 1; // This is a 2-cycle instruction
+			}
 			else Core_Program_Counter++; // Point on next instruction
 			LOG(LOG_LEVEL_DEBUG, "Found instruction : DECFSZ 0x%02X, %c.\n", Byte_Operand_2, Byte_Operand_1 == 0 ? 'W' : 'F');
 			goto Exit;
@@ -490,7 +514,11 @@ void CoreExecuteNextInstruction(void)
 			if (Byte_Operand_1 == 0) Core_Register_W = Temp_Byte;
 			else RegisterFileBankedWrite(Byte_Operand_2, Temp_Byte);
 			// Skip next instruction if the result is zero
-			if (Temp_Byte == 0) Core_Program_Counter += 2;
+			if (Temp_Byte == 0)
+			{
+				Core_Program_Counter += 2;
+				Is_Cycle_Lost = 1; // This is a 2-cycle instruction
+			}
 			else Core_Program_Counter++; // Point on next instruction
 			LOG(LOG_LEVEL_DEBUG, "Found instruction : INCFSZ 0x%02X, %c.\n", Byte_Operand_2, Byte_Operand_1 == 0 ? 'W' : 'F');
 			goto Exit;
@@ -507,6 +535,7 @@ void CoreExecuteNextInstruction(void)
 			CoreStackPush(Core_Program_Counter + 1);
 			// Do the operation
 			Core_Program_Counter = (Temp_Byte << 8) | Word_Operand;
+			Is_Cycle_Lost = 1; // This is a 2-cycle instruction
 			LOG(LOG_LEVEL_DEBUG, "Found instruction : CALL 0x%04X.\n", Word_Operand);
 			goto Exit;
 		
@@ -514,6 +543,7 @@ void CoreExecuteNextInstruction(void)
 		case 0x05:
 			// Do the operation
 			Core_Program_Counter = (Temp_Byte << 8) | Word_Operand;
+			Is_Cycle_Lost = 1; // This is a 2-cycle instruction
 			LOG(LOG_LEVEL_DEBUG, "Found instruction : GOTO 0x%04X.\n", Word_Operand);
 			goto Exit;
 	}
@@ -537,6 +567,7 @@ void CoreExecuteNextInstruction(void)
 			Core_Register_W = Byte_Operand_1;
 			// Pop the return address
 			Core_Program_Counter = CoreStackPop();
+			Is_Cycle_Lost = 1; // This is a 2-cycle instruction
 			LOG(LOG_LEVEL_DEBUG, "Found instruction : RETLW 0x%02X.\n", Byte_Operand_1);
 			goto Exit;
 			
